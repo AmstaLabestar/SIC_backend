@@ -1,0 +1,139 @@
+{% extends 'dashboard/base.html' %}
+
+{% block content %}
+<div class="space-y-6">
+    
+    <!-- Header -->
+    <div class="flex items-center justify-between">
+        <div>
+            <h2 class="text-3xl font-bold text-slate-900 tracking-tight">Gestion des Agents</h2>
+            <p class="text-slate-500 mt-1">Validez les dossiers KYC et gérez les accès à l'API.</p>
+        </div>
+    </div>
+
+    <!-- Table Container -->
+    <div class="bg-white border border-slate-200/80 rounded-3xl shadow-sm overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="bg-slate-50/50 border-b border-slate-200/80">
+                        <th class="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Agent</th>
+                        <th class="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Contact</th>
+                        <th class="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Inscription</th>
+                        <th class="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Statut KYC</th>
+                        <th class="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    {% for agent in page_obj %}
+                    <tr class="hover:bg-slate-50/50 transition-colors group">
+                        
+                        <!-- Agent Info -->
+                        <td class="px-6 py-4">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-full bg-brand-100 flex items-center justify-center text-brand-600 font-bold">
+                                    {{ agent.first_name|default:"A"|make_list|first|upper }}{{ agent.last_name|default:""|make_list|first|upper }}
+                                </div>
+                                <div>
+                                    <p class="text-sm font-bold text-slate-900">
+                                        {{ agent.first_name|default:"-" }} {{ agent.last_name|default:"" }}
+                                    </p>
+                                    <p class="text-xs text-slate-500 font-mono">ID: {{ agent.id|stringformat:"s"|truncatechars:10 }}</p>
+                                </div>
+                            </div>
+                        </td>
+                        
+                        <!-- Contact -->
+                        <td class="px-6 py-4">
+                            <p class="text-sm text-slate-700 font-medium">{{ agent.phone_number }}</p>
+                            <p class="text-xs text-slate-400">{{ agent.user.email }}</p>
+                        </td>
+
+                        <!-- Date -->
+                        <td class="px-6 py-4 text-sm text-slate-600">
+                            {{ agent.created_at|date:"d M Y, H:i" }}
+                        </td>
+
+                        <!-- KYC Status Badge -->
+                        <td class="px-6 py-4">
+                            {% if agent.is_suspended %}
+                                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-rose-50 text-rose-600 border border-rose-200">
+                                    <i data-lucide="ban" class="w-3.5 h-3.5"></i> Suspendu
+                                </span>
+                            {% elif agent.kyc_status == 'APPROVED' %}
+                                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-50 text-emerald-600 border border-emerald-200">
+                                    <i data-lucide="check-circle-2" class="w-3.5 h-3.5"></i> Approuvé
+                                </span>
+                            {% elif agent.kyc_status == 'PENDING' %}
+                                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-orange-50 text-orange-600 border border-orange-200 animate-pulse">
+                                    <i data-lucide="clock" class="w-3.5 h-3.5"></i> En attente
+                                </span>
+                            {% else %}
+                                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                                    <i data-lucide="x-circle" class="w-3.5 h-3.5"></i> {{ agent.kyc_status }}
+                                </span>
+                            {% endif %}
+                        </td>
+
+                        <!-- Actions -->
+                        <td class="px-6 py-4 text-right">
+                            <div class="flex items-center justify-end gap-2 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
+                                
+                                {% if agent.kyc_status == 'PENDING' %}
+                                <a href="{% url 'dashboard:agent_kyc_action' agent.id 'approve' %}" title="Approuver KYC" class="p-2 bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white rounded-xl transition-colors">
+                                    <i data-lucide="check" class="w-4 h-4"></i>
+                                </a>
+                                <a href="{% url 'dashboard:agent_kyc_action' agent.id 'reject' %}" title="Rejeter KYC" class="p-2 bg-rose-50 text-rose-600 hover:bg-rose-600 hover:text-white rounded-xl transition-colors">
+                                    <i data-lucide="x" class="w-4 h-4"></i>
+                                </a>
+                                {% endif %}
+
+                                {% if agent.is_suspended %}
+                                <a href="{% url 'dashboard:agent_kyc_action' agent.id 'suspend' %}" title="Réactiver" class="p-2 bg-slate-100 text-slate-600 hover:bg-slate-800 hover:text-white rounded-xl transition-colors">
+                                    <i data-lucide="unlock" class="w-4 h-4"></i>
+                                </a>
+                                {% else %}
+                                <a href="{% url 'dashboard:agent_kyc_action' agent.id 'suspend' %}" title="Suspendre" class="p-2 bg-slate-100 text-slate-600 hover:bg-rose-600 hover:text-white rounded-xl transition-colors">
+                                    <i data-lucide="lock" class="w-4 h-4"></i>
+                                </a>
+                                {% endif %}
+
+                            </div>
+                        </td>
+
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" class="px-6 py-12 text-center text-slate-500">
+                            <div class="flex flex-col items-center justify-center">
+                                <i data-lucide="users" class="w-12 h-12 text-slate-300 mb-3"></i>
+                                <p>Aucun agent trouvé.</p>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        {% if page_obj.has_other_pages %}
+        <div class="px-6 py-4 border-t border-slate-100 flex items-center justify-between bg-slate-50/30">
+            <p class="text-sm text-slate-500">
+                Page <span class="font-medium text-slate-900">{{ page_obj.number }}</span> sur <span class="font-medium text-slate-900">{{ page_obj.paginator.num_pages }}</span>
+            </p>
+            <div class="flex items-center gap-2">
+                {% if page_obj.has_previous %}
+                <a href="?page={{ page_obj.previous_page_number }}" class="px-3 py-1.5 border border-slate-200 rounded-lg text-sm font-medium text-slate-600 hover:bg-white hover:text-brand-600 transition-colors">Précédent</a>
+                {% endif %}
+                
+                {% if page_obj.has_next %}
+                <a href="?page={{ page_obj.next_page_number }}" class="px-3 py-1.5 border border-slate-200 rounded-lg text-sm font-medium text-slate-600 hover:bg-white hover:text-brand-600 transition-colors">Suivant</a>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+</div>
+{% endblock %}

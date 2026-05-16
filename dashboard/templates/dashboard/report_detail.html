@@ -1,0 +1,102 @@
+{% extends 'dashboard/base.html' %}
+
+{% block content %}
+<div class="space-y-6">
+    
+    <!-- Header -->
+    <div class="flex items-center justify-between">
+        <div class="flex items-center gap-4">
+            <a href="{% url 'dashboard:report_list' %}" class="w-10 h-10 bg-white border border-slate-200/80 rounded-xl flex items-center justify-center text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-colors shadow-sm">
+                <i data-lucide="arrow-left" class="w-5 h-5"></i>
+            </a>
+            <div>
+                <h2 class="text-3xl font-bold text-slate-900 tracking-tight">{{ report.title }}</h2>
+                <div class="flex items-center gap-3 mt-2 text-xs text-slate-500">
+                    <span class="bg-slate-100 px-2 py-1 rounded">Date: {{ report.get_date_range_display|default:report.date_range }}</span>
+                    <span class="bg-slate-100 px-2 py-1 rounded">Type: {{ report.tx_type }}</span>
+                    <span class="bg-slate-100 px-2 py-1 rounded">Op: {{ report.operator }}</span>
+                    <span class="bg-slate-100 px-2 py-1 rounded">Statut: {{ report.status }}</span>
+                </div>
+            </div>
+        </div>
+        <div class="flex gap-2">
+            <a href="?export=csv" class="px-4 py-2.5 bg-slate-800 text-white rounded-xl text-sm font-semibold hover:bg-slate-900 transition-colors shadow-sm flex items-center gap-2">
+                <i data-lucide="download" class="w-4 h-4"></i> Exporter CSV
+            </a>
+            <a href="{% url 'dashboard:report_edit' report.id %}" class="px-4 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl text-sm font-semibold hover:bg-slate-50 transition-colors shadow-sm flex items-center gap-2">
+                <i data-lucide="settings-2" class="w-4 h-4"></i> Modifier Filtres
+            </a>
+            <button onclick="window.print()" class="px-4 py-2.5 bg-brand-600 text-white rounded-xl text-sm font-semibold hover:bg-brand-700 hover:shadow-lg hover:shadow-brand-500/30 transition-all flex items-center gap-2">
+                <i data-lucide="printer" class="w-4 h-4"></i> Imprimer / PDF
+            </button>
+        </div>
+    </div>
+
+    <!-- KPIs -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div class="bg-white p-6 rounded-3xl border border-slate-200/60 shadow-sm flex items-center gap-4">
+            <div class="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center"><i data-lucide="hash" class="w-6 h-6"></i></div>
+            <div>
+                <p class="text-sm font-semibold text-slate-500">Total Opérations</p>
+                <p class="text-2xl font-black text-slate-900">{{ total_count }}</p>
+            </div>
+        </div>
+        <div class="bg-white p-6 rounded-3xl border border-slate-200/60 shadow-sm flex items-center gap-4">
+            <div class="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center"><i data-lucide="bar-chart-3" class="w-6 h-6"></i></div>
+            <div>
+                <p class="text-sm font-semibold text-slate-500">Volume Total</p>
+                <p class="text-2xl font-black text-slate-900">{{ total_volume|floatformat:"0"|default:"0" }} <span class="text-sm text-slate-400">FCFA</span></p>
+            </div>
+        </div>
+        <div class="bg-gradient-to-br from-slate-900 to-slate-800 p-6 rounded-3xl shadow-lg flex items-center gap-4 text-white relative overflow-hidden">
+            <div class="absolute -right-4 -top-4 w-24 h-24 bg-brand-500 rounded-full blur-2xl opacity-40"></div>
+            <div class="w-12 h-12 rounded-2xl bg-white/10 text-brand-400 flex items-center justify-center relative z-10"><i data-lucide="wallet" class="w-6 h-6"></i></div>
+            <div class="relative z-10">
+                <p class="text-sm font-semibold text-slate-300">Revenus SIC (Commissions)</p>
+                <p class="text-2xl font-black">{{ total_profit|floatformat:"0"|default:"0" }} <span class="text-sm text-slate-400">FCFA</span></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Table -->
+    <div class="bg-white border border-slate-200/80 rounded-3xl shadow-sm overflow-hidden">
+        <div class="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
+            <h3 class="font-bold text-slate-900">Extrait des données (Max 100)</h3>
+            <span class="text-xs text-slate-500">Généré le {% now "d/m/Y H:i" %}</span>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse whitespace-nowrap">
+                <thead>
+                    <tr class="bg-slate-50/50 border-b border-slate-200/80">
+                        <th class="px-6 py-4 text-xs font-bold text-slate-500 uppercase">Date</th>
+                        <th class="px-6 py-4 text-xs font-bold text-slate-500 uppercase">Type</th>
+                        <th class="px-6 py-4 text-xs font-bold text-slate-500 uppercase">Opérateur</th>
+                        <th class="px-6 py-4 text-xs font-bold text-slate-500 uppercase text-right">Montant</th>
+                        <th class="px-6 py-4 text-xs font-bold text-slate-500 uppercase text-right">Commission</th>
+                        <th class="px-6 py-4 text-xs font-bold text-slate-500 uppercase text-right">Statut</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    {% for tx in transactions %}
+                    <tr class="hover:bg-slate-50 transition-colors">
+                        <td class="px-6 py-3 text-sm">{{ tx.created_at|date:"d/m/Y H:i" }}</td>
+                        <td class="px-6 py-3 text-sm font-semibold text-slate-700">{{ tx.type }}</td>
+                        <td class="px-6 py-3 text-sm">{{ tx.target_operator }}</td>
+                        <td class="px-6 py-3 text-sm font-mono text-right font-bold">{{ tx.amount|floatformat:"0" }}</td>
+                        <td class="px-6 py-3 text-sm font-mono text-right text-emerald-600 font-bold">+{{ tx.commission_sic|floatformat:"0" }}</td>
+                        <td class="px-6 py-3 text-right">
+                            <span class="text-xs font-bold {% if tx.status == 'COMPLETED' %}text-emerald-600{% elif tx.status == 'PENDING' %}text-orange-600{% else %}text-rose-600{% endif %}">
+                                {{ tx.status }}
+                            </span>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="6" class="px-6 py-8 text-center text-slate-500">Aucune donnée pour ces filtres.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
