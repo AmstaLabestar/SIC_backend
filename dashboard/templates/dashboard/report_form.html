@@ -2,16 +2,16 @@
 
 {% block content %}
 <div class="max-w-3xl mx-auto space-y-6">
-    
+
     <!-- Header -->
     <div class="flex items-center justify-between">
         <div class="flex items-center gap-4">
-            <a href="{% url 'dashboard:report_list' %}" class="w-10 h-10 bg-white border border-slate-200/80 rounded-xl flex items-center justify-center text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-colors shadow-sm">
+            <a href="{% url 'dashboard:report_list' %}" class="w-10 h-10 bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 rounded-xl flex items-center justify-center text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white transition-colors shadow-sm">
                 <i data-lucide="arrow-left" class="w-5 h-5"></i>
             </a>
             <div>
-                <h2 class="text-3xl font-bold text-slate-900 tracking-tight">{% if report %}Modifier le Rapport{% else %}Nouveau Rapport{% endif %}</h2>
-                <p class="text-slate-500 mt-1">Configurez les filtres d'analyse financière.</p>
+                <h2 class="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">{% if report %}Modifier le Rapport{% else %}Nouveau Rapport{% endif %}</h2>
+                <p class="text-slate-500 dark:text-slate-400 mt-1">Configurez les filtres d'analyse financière.</p>
             </div>
         </div>
         {% if report %}
@@ -22,22 +22,22 @@
     </div>
 
     <!-- Form -->
-    <div class="bg-white rounded-3xl border border-slate-200/80 p-8 shadow-sm">
+    <div class="bg-white dark:bg-slate-800 rounded-3xl border border-slate-200/80 dark:border-slate-700 p-8 shadow-sm">
         <form method="POST" class="space-y-8">
             {% csrf_token %}
-            
+
             <div class="space-y-2">
-                <label class="text-sm font-bold text-slate-900">Nom du rapport</label>
-                <input type="text" name="title" required value="{{ report.title|default:'' }}" placeholder="Ex: Échecs Dépôts Orange de cette semaine" class="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition-all text-slate-900">
+                <label class="text-sm font-bold text-slate-900 dark:text-white">Nom du rapport</label>
+                <input type="text" name="title" required value="{{ report.title|default:'' }}" placeholder="Ex: Échecs Dépôts Orange de cette semaine" class="w-full px-4 py-3 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 dark:text-white rounded-xl focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition-all text-slate-900">
             </div>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                
+
                 <div class="space-y-2">
-                    <label class="text-sm font-bold text-slate-900">Période d'analyse</label>
+                    <label class="text-sm font-bold text-slate-900 dark:text-white">Période d'analyse</label>
                     <div class="relative">
-                        <i data-lucide="calendar" class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400"></i>
-                        <select name="date_range" class="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition-all text-slate-900 appearance-none font-medium">
+                        <i data-lucide="calendar" class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 dark:text-slate-500"></i>
+                        <select name="date_range" class="w-full pl-11 pr-4 py-3 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 dark:text-white rounded-xl focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition-all text-slate-900 appearance-none font-medium">
                             <option value="ALL" {% if report.date_range == 'ALL' %}selected{% endif %}>Toujours (Historique complet)</option>
                             <option value="TODAY" {% if report.date_range == 'TODAY' %}selected{% endif %}>Aujourd'hui</option>
                             <option value="THIS_WEEK" {% if report.date_range == 'THIS_WEEK' %}selected{% endif %}>Cette semaine</option>
@@ -47,10 +47,10 @@
                 </div>
 
                 <div class="space-y-2">
-                    <label class="text-sm font-bold text-slate-900">Type de Transaction</label>
+                    <label class="text-sm font-bold text-slate-900 dark:text-white">Type de Transaction</label>
                     <div class="relative">
-                        <i data-lucide="tag" class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400"></i>
-                        <select name="tx_type" class="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition-all text-slate-900 appearance-none font-medium">
+                        <i data-lucide="tag" class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 dark:text-slate-500"></i>
+                        <select name="tx_type" class="w-full pl-11 pr-4 py-3 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 dark:text-white rounded-xl focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition-all text-slate-900 appearance-none font-medium">
                             <option value="ALL" {% if report.tx_type == 'ALL' %}selected{% endif %}>Toutes opérations</option>
                             <option value="DEPOT" {% if report.tx_type == 'DEPOT' %}selected{% endif %}>Dépôts uniquement</option>
                             <option value="RETRAIT" {% if report.tx_type == 'RETRAIT' %}selected{% endif %}>Retraits uniquement</option>
@@ -60,10 +60,10 @@
                 </div>
 
                 <div class="space-y-2">
-                    <label class="text-sm font-bold text-slate-900">Opérateur (Moyen de paiement)</label>
+                    <label class="text-sm font-bold text-slate-900 dark:text-white">Opérateur (Moyen de paiement)</label>
                     <div class="relative">
-                        <i data-lucide="smartphone" class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400"></i>
-                        <select name="operator" class="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition-all text-slate-900 appearance-none font-medium">
+                        <i data-lucide="smartphone" class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 dark:text-slate-500"></i>
+                        <select name="operator" class="w-full pl-11 pr-4 py-3 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 dark:text-white rounded-xl focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition-all text-slate-900 appearance-none font-medium">
                             <option value="ALL" {% if report.operator == 'ALL' %}selected{% endif %}>Tous les opérateurs</option>
                             <option value="Orange" {% if report.operator == 'Orange' %}selected{% endif %}>Orange Money</option>
                             <option value="Moov" {% if report.operator == 'Moov' %}selected{% endif %}>Moov Money</option>
@@ -74,10 +74,10 @@
                 </div>
 
                 <div class="space-y-2">
-                    <label class="text-sm font-bold text-slate-900">Statut Financier</label>
+                    <label class="text-sm font-bold text-slate-900 dark:text-white">Statut Financier</label>
                     <div class="relative">
-                        <i data-lucide="activity" class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400"></i>
-                        <select name="status" class="w-full pl-11 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition-all text-slate-900 appearance-none font-medium">
+                        <i data-lucide="activity" class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 dark:text-slate-500"></i>
+                        <select name="status" class="w-full pl-11 pr-4 py-3 bg-slate-50 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 dark:text-white rounded-xl focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition-all text-slate-900 appearance-none font-medium">
                             <option value="ALL" {% if report.status == 'ALL' %}selected{% endif %}>Tous les statuts</option>
                             <option value="COMPLETED" {% if report.status == 'COMPLETED' %}selected{% endif %}>Complété (Succès)</option>
                             <option value="PENDING" {% if report.status == 'PENDING' %}selected{% endif %}>En attente</option>
@@ -87,8 +87,8 @@
                 </div>
             </div>
 
-            <div class="pt-6 border-t border-slate-100 flex justify-end gap-3">
-                <a href="{% url 'dashboard:report_list' %}" class="px-6 py-3 bg-white border border-slate-200 text-slate-700 rounded-xl font-bold hover:bg-slate-50 transition-colors">Annuler</a>
+            <div class="pt-6 border-t border-slate-100 dark:border-slate-700/50 flex justify-end gap-3">
+                <a href="{% url 'dashboard:report_list' %}" class="px-6 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-xl font-bold hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">Annuler</a>
                 <button type="submit" class="px-6 py-3 bg-brand-600 text-white rounded-xl font-bold hover:bg-brand-700 shadow-lg shadow-brand-500/30 transition-all flex items-center gap-2">
                     <i data-lucide="save" class="w-5 h-5"></i> Sauvegarder
                 </button>

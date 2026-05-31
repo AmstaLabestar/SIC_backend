@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 
 from pathlib import Path
 import os
+import sys
 from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -20,16 +21,49 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / '.env')
 
 
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
+def get_env(key, default=None, required=False):
+    """Récupère une variable d'environnement de manière sécurisée."""
+    value = os.environ.get(key, default)
+    if required and not value:
+        raise RuntimeError(
+            f"❌ La variable d'environnement '{key}' est requise mais n'est pas définie. "
+            f"Veuillez la définir dans le fichier .env"
+        )
+    return value
+
+
+def get_bool(key, default=False):
+    """Convertit une variable d'environnement en booléen."""
+    return str(os.environ.get(key, str(default))).lower() in ('true', '1', 'yes', 'on')
+
+
+def get_list(key, default='', separator=','):
+    """Convertit une variable d'environnement en liste."""
+    value = os.environ.get(key, default)
+    return [item.strip() for item in value.split(separator) if item.strip()]
+
+
+# ============================================================================
+# SÉCURITÉ - Configuration critique
+# ============================================================================
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-fallback-key-do-not-use-in-prod')
+SECRET_KEY = get_env('SECRET_KEY') or get_env('DJANGO_SECRET_KEY') or 'dev-secret-key-not-for-production'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.environ.get('DEBUG', 'False').lower() == 'true'
+DEBUG = get_bool('DEBUG', default=False)
 
-ALLOWED_HOSTS = ['*'] if DEBUG else os.environ.get('ALLOWED_HOSTS', '').split(',')
+# Configuration des hôtes autorisés
+if DEBUG:
+    ALLOWED_HOSTS = ['*']
+else:
+    _hosts = get_env('ALLOWED_HOSTS', required=True)
+    if not _hosts:
+        raise RuntimeError(
+            "❌ La variable d'environnement 'ALLOWED_HOSTS' est requise en production. "
+            "Veuillez la définir dans le fichier .env"
+        )
+    ALLOWED_HOSTS = get_list('ALLOWED_HOSTS')
 
 
 # Application definition
@@ -44,6 +78,7 @@ INSTALLED_APPS = [
     'corsheaders',
     'rest_framework',
     'rest_framework_simplejwt',
+    'rest_framework_simplejwt.token_blacklist',
     'drf_spectacular',
     'tailwind',
     'theme',
@@ -86,15 +121,46 @@ TEMPLATES = [
 WSGI_APPLICATION = 'config.wsgi.application'
 
 
-# Database
-# https://docs.djangoproject.com/en/6.0/ref/settings/#databases
+# ============================================================================
+# DATABASE - Configuration PostgreSQL avec Docker
+# ============================================================================
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+# En développement local (sans Docker), utiliser SQLite ou PostgreSQL local
+# En production/Docker, utiliser la DATABASE_URL
+
+USE_DOCKER = get_bool('USE_DOCKER', default=False)
+
+if USE_DOCKER:
+    # Configuration Docker - utilise DATABASE_URL
+    DATABASE_URL = get_env('DATABASE_URL', required=True)
+    import dj_database_url
+    DATABASES = {
+        'default': dj_database_url.config(
+            default=DATABASE_URL,
+            conn_max_age=600,
+        )
     }
-}
+elif DATABASE_URL:
+    # PostgreSQL local (via DATABASE_URL)
+    import dj_database_url
+    DATABASES = {
+        'default': dj_database_url.config(
+            default=DATABASE_URL,
+            conn_max_age=600,
+        )
+    }
+else:
+    # PostgreSQL local avec configuration explicite
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': get_env('POSTGRES_DB', 'sic_db'),
+            'USER': get_env('POSTGRES_USER', 'sic_user'),
+            'PASSWORD': get_env('POSTGRES_PASSWORD', 'sic_password=8258'),
+            'HOST': get_env('POSTGRES_HOST', 'localhost'),
+            'PORT': get_env('POSTGRES_PORT', '5432'),
+        }
+    }
 
 
 # Password validation
@@ -106,6 +172,9 @@ AUTH_PASSWORD_VALIDATORS = [
     },
     {
         'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
+        'OPTIONS': {
+            'min_length': 8,
+        }
     },
     {
         'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
@@ -119,9 +188,9 @@ AUTH_PASSWORD_VALIDATORS = [
 # Internationalization
 # https://docs.djangoproject.com/en/6.0/topics/i18n/
 
-LANGUAGE_CODE = 'en-us'
+LANGUAGE_CODE = 'fr-fr'  # Français par défaut (projet francophone)
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = 'Africa/Abidjan'  # Fuseau horaire de l'Afrique de l'Ouest (UTC+0)
 
 USE_I18N = True
 
@@ -132,9 +201,52 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
+
+# Default primary key field type
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+
+# ============================================================================
+# CORS - Configuration sécurisée
+# ============================================================================
 
 CORS_ALLOW_ALL_ORIGINS = False
-CORS_ALLOWED_ORIGINS = [origin.strip() for origin in os.environ.get('CORS_ALLOWED_ORIGINS', 'http://localhost:8000').split(',') if origin.strip()]
+CORS_ALLOWED_ORIGINS = get_list(
+    'CORS_ALLOWED_ORIGINS',
+    default='http://localhost:8000,http://127.0.0.1:8000'
+)
+
+# En production, autoriser uniquement les origines de confiance
+if not DEBUG:
+    CORS_ALLOW_CREDENTIALS = True
+    CORS_ALLOWED_METHODS = [
+        'DELETE',
+        'GET',
+        'OPTIONS',
+        'PATCH',
+        'POST',
+        'PUT',
+    ]
+    CORS_ALLOWED_HEADERS = [
+        'accept',
+        'accept-encoding',
+        'authorization',
+        'content-type',
+        'dnt',
+        'origin',
+        'user-agent',
+        'x-csrftoken',
+        'x-requested-with',
+    ]
+
+
+# ============================================================================
+# Django REST Framework
+# ============================================================================
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
@@ -146,20 +258,47 @@ REST_FRAMEWORK = {
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
     'DEFAULT_THROTTLE_CLASSES': [
         'rest_framework.throttling.AnonRateThrottle',
-        'rest_framework.throttling.UserRateThrottle'
+        'rest_framework.throttling.UserRateThrottle',
+        'rest_framework.throttling.ScopedRateThrottle',
     ],
     'DEFAULT_THROTTLE_RATES': {
         'anon': '10/minute',
-        'user': '60/minute'
-    }
+        'user': '60/minute',
+        'login': '5/minute',       # Limite stricte sur l'authentification
+        'register': '3/hour',      # Anti-bruteforce sur l'inscription
+        'transaction': '30/minute' # Limite sur les transactions
+    },
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 20,
 }
+
+# JWT Configuration
+from datetime import timedelta
+
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=int(get_env('JWT_ACCESS_LIFETIME_MINUTES', '60'))),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=int(get_env('JWT_REFRESH_LIFETIME_DAYS', '7'))),
+    'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': True,
+    'ALGORITHM': 'HS256',
+    'SIGNING_KEY': SECRET_KEY,
+    'AUTH_HEADER_TYPES': ('Bearer',),
+    'USER_ID_FIELD': 'id',
+    'USER_ID_CLAIM': 'user_id',
+    'AUTH_TOKEN_CLASSES': ('rest_framework_simplejwt.tokens.AccessToken',),
+}
+
+# ============================================================================
+# Documentation API
+# ============================================================================
 
 SPECTACULAR_SETTINGS = {
     'TITLE': 'SIC Platform API',
     'DESCRIPTION': 'Documentation interactive pour les APIs de SIC Fintech',
     'VERSION': '1.0.0',
     'SERVE_INCLUDE_SCHEMA': False,
-    # Configure les composants de sécurité Swagger pour utiliser JWT
+    # Masquer la doc Swagger en production
+    'SERVE_PERMISSIONS': [] if DEBUG else ['rest_framework.permissions.IsAdminUser'],
     'SECURITY': [{'jwtAuth': []}],
     'COMPONENTS': {
         'securitySchemes': {
@@ -172,10 +311,149 @@ SPECTACULAR_SETTINGS = {
     }
 }
 
-# Celery Configuration Options
-CELERY_BROKER_URL = 'redis://localhost:6379/0'
-CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
+
+# ============================================================================
+# Celery Configuration
+# ============================================================================
+
+CELERY_BROKER_URL = get_env('CELERY_BROKER_URL', default='redis://localhost:6379/0')
+CELERY_RESULT_BACKEND = get_env('CELERY_RESULT_BACKEND', default='redis://localhost:6379/0')
 CELERY_ACCEPT_CONTENT = ['application/json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = TIME_ZONE
+CELERY_TASK_ALWAYS_EAGER = DEBUG  # En dev, exécution synchrone
+
+
+# ============================================================================
+# Sécurité HTTPS / Headers
+# ============================================================================
+
+if not DEBUG:
+    # Forcer HTTPS
+    SECURE_SSL_REDIRECT = True
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
+    # Cookies sécurisés
+    SESSION_COOKIE_SECURE = True
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = 'Strict'
+    CSRF_COOKIE_SECURE = True
+    CSRF_COOKIE_HTTPONLY = True
+    CSRF_COOKIE_SAMESITE = 'Strict'
+
+    # Protection HSTS (1 an)
+    SECURE_HSTS_SECONDS = 31536000
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+
+    # Protection contre le clickjacking
+    X_FRAME_OPTIONS = 'DENY'
+
+    # Headers de sécurité
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    SECURE_REFERRER_POLICY = 'same-origin'
+
+    # Empêcher le navigateur d'envoyer le Referer
+    REFERRER_POLICY = 'same-origin'
+
+# Protection CSRF - utilisation de SameSite
+CSRF_USE_SESSIONS = False
+CSRF_FAILURE_VIEW = 'core.views.csrf_failure'
+
+
+# ============================================================================
+# Logging - Configuration
+# ============================================================================
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '[{asctime}] {levelname} {name}: {message}',
+            'style': '{',
+        },
+        'security': {
+            'format': '[{asctime}] SECURITY {levelname} {name}: {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+        },
+        'security_file': {
+            'class': 'logging.FileHandler',
+            'filename': BASE_DIR / 'logs' / 'security.log',
+            'formatter': 'security',
+        },
+        'transactions_file': {
+            'class': 'logging.FileHandler',
+            'filename': BASE_DIR / 'logs' / 'transactions.log',
+            'formatter': 'verbose',
+        },
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console'],
+            'level': 'INFO' if not DEBUG else 'DEBUG',
+        },
+        'django.security': {
+            'handlers': ['console', 'security_file'] if not DEBUG else ['console'],
+            'level': 'WARNING',
+            'propagate': False,
+        },
+        'sic.transactions': {
+            'handlers': ['transactions_file', 'console'] if DEBUG else ['transactions_file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+    },
+}
+
+# Création du dossier logs
+(BASE_DIR / 'logs').mkdir(exist_ok=True)
+
+
+# ============================================================================
+# Configuration SIC (commissions et limites)
+# ============================================================================
+
+# Commissions par type de transaction (en pourcentage)
+COMMISSION_RATES = {
+    'DEPOT': {
+        'commission_sic_rate': float(get_env('COMMISSION_DEPOT_SIC', '1.0')),  # % pour SIC
+        'agent_benefit_rate': float(get_env('COMMISSION_DEPOT_AGENT', '0.5')), # % pour l'agent
+    },
+    'RETRAIT': {
+        'commission_sic_rate': float(get_env('COMMISSION_RETRAIT_SIC', '1.5')),
+        'agent_benefit_rate': float(get_env('COMMISSION_RETRAIT_AGENT', '0.5')),
+    },
+    'TRANSFERT': {
+        'commission_sic_rate': float(get_env('COMMISSION_TRANSFERT_SIC', '0.5')),
+        'agent_benefit_rate': float(get_env('COMMISSION_TRANSFERT_AGENT', '0.0')),
+    },
+    'SWAP': {
+        'commission_sic_rate': float(get_env('COMMISSION_SWAP_SIC', '0.5')),
+        'agent_benefit_rate': float(get_env('COMMISSION_SWAP_AGENT', '0.0')),
+    },
+}
+
+# Montant maximum par transaction (FCFA)
+MAX_TRANSACTION_AMOUNT = int(get_env('MAX_TRANSACTION_AMOUNT', '5000000'))  # 5M FCFA
+MIN_TRANSACTION_AMOUNT = 100
+
+# Timeout des transactions (minutes)
+TRANSACTION_TIMEOUT_MINUTES = int(get_env('TRANSACTION_TIMEOUT_MINUTES', '5'))
+
+# Configuration CinetPay
+CINETPAY_CONFIG = {
+    'API_KEY': get_env('CINETPAY_API_KEY', default=''),
+    'SITE_ID': get_env('CINETPAY_SITE_ID', default=''),
+    'SECRET_KEY': get_env('CINETPAY_SECRET_KEY', default=''),
+    'BASE_URL': get_env('CINETPAY_BASE_URL', default='https://api-checkout.cinetpay.com/v2'),
+    'NOTIFY_URL': get_env('CINETPAY_NOTIFY_URL', default='http://localhost:8000/api/transactions/webhook/'),
+    'RETURN_URL': get_env('CINETPAY_RETURN_URL', default='http://localhost:8000/dashboard/'),
+}

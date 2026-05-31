@@ -2,12 +2,12 @@
 
 {% block content %}
 <div class="space-y-6">
-    
+
     <!-- Header -->
     <div class="flex items-center justify-between">
         <div>
-            <h2 class="text-3xl font-bold text-slate-900 tracking-tight">{{ page_title|default:"Historique des Transactions" }}</h2>
-            <p class="text-slate-500 mt-1">
+            <h2 class="text-3xl font-bold text-slate-900 dark:text-white tracking-tight">{{ page_title|default:"Historique des Transactions" }}</h2>
+            <p class="text-slate-500 dark:text-slate-400 mt-1">
                 {% if tx_type %}
                 Consultez et filtrez tous les {{ tx_type }}.
                 {% else %}
@@ -18,104 +18,104 @@
         <div class="flex gap-3">
             <div class="relative group">
                 <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <i data-lucide="filter" class="w-4 h-4 text-slate-400"></i>
+                    <i data-lucide="filter" class="w-4 h-4 text-slate-400 dark:text-slate-500"></i>
                 </div>
-                <select class="pl-9 pr-8 py-2.5 bg-white border border-slate-200/80 text-slate-700 rounded-xl text-sm font-semibold hover:bg-slate-50 transition-colors shadow-sm focus:outline-none focus:border-brand-500 appearance-none">
+                <select class="pl-9 pr-8 py-2.5 bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-sm font-semibold hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-sm focus:outline-none focus:border-brand-500 appearance-none">
                     <option>Tous les statuts</option>
                     <option>Complété</option>
                     <option>En attente</option>
                     <option>Échoué</option>
                 </select>
             </div>
-            <a href="?export=csv" class="px-4 py-2.5 bg-white border border-slate-200/80 text-slate-700 rounded-xl text-sm font-semibold hover:bg-slate-50 transition-colors shadow-sm flex items-center gap-2">
+            <a href="?export=csv" class="px-4 py-2.5 bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-sm font-semibold hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-sm flex items-center gap-2">
                 <i data-lucide="download" class="w-4 h-4"></i> CSV
             </a>
         </div>
     </div>
 
     <!-- Table Container -->
-    <div class="bg-white border border-slate-200/80 rounded-3xl shadow-sm overflow-hidden">
+    <div class="bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 rounded-3xl shadow-sm overflow-hidden">
         <div class="overflow-x-auto">
             <table class="w-full text-left border-collapse whitespace-nowrap">
                 <thead>
-                    <tr class="bg-slate-50/50 border-b border-slate-200/80">
-                        <th class="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">ID Ref</th>
-                        <th class="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Date & Heure</th>
-                        <th class="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Agent Initiateur</th>
-                        <th class="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Type</th>
-                        <th class="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Montant (FCFA)</th>
-                        <th class="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">Statut</th>
-                        <th class="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-center">Action</th>
+                    <tr class="bg-slate-50/50 dark:bg-slate-700/50 border-b border-slate-200/80 dark:border-slate-700">
+                        <th class="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">ID Ref</th>
+                        <th class="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Date & Heure</th>
+                        <th class="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Agent Initiateur</th>
+                        <th class="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Type</th>
+                        <th class="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-right">Montant (FCFA)</th>
+                        <th class="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-right">Statut</th>
+                        <th class="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-center">Action</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-slate-100">
+                <tbody class="divide-y divide-slate-100 dark:divide-slate-700/50">
                     {% for tx in page_obj %}
-                    <tr class="hover:bg-slate-50/50 transition-colors">
-                        
+                    <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-700 transition-colors">
+
                         <!-- TX ID -->
                         <td class="px-6 py-4">
-                            <span class="text-xs font-mono text-slate-500 bg-slate-100 px-2 py-1 rounded-md">
+                            <span class="text-xs font-mono text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded-md">
                                 {{ tx.id|stringformat:"s"|truncatechars:12 }}
                             </span>
                         </td>
 
                         <!-- Date -->
                         <td class="px-6 py-4">
-                            <p class="text-sm text-slate-900 font-medium">{{ tx.created_at|date:"d/m/Y" }}</p>
-                            <p class="text-xs text-slate-500">{{ tx.created_at|time:"H:i:s" }}</p>
+                            <p class="text-sm text-slate-900 dark:text-white font-medium">{{ tx.created_at|date:"d/m/Y" }}</p>
+                            <p class="text-xs text-slate-500 dark:text-slate-400">{{ tx.created_at|time:"H:i:s" }}</p>
                         </td>
-                        
+
                         <!-- Agent -->
                         <td class="px-6 py-4">
-                            <p class="text-sm font-semibold text-slate-900">
+                            <p class="text-sm font-semibold text-slate-900 dark:text-white">
                                 {{ tx.agent.first_name|default:"-" }} {{ tx.agent.last_name|default:"" }}
                             </p>
-                            <p class="text-xs text-slate-500">{{ tx.agent.phone_number }}</p>
+                            <p class="text-xs text-slate-500 dark:text-slate-400">{{ tx.agent.phone_number }}</p>
                         </td>
 
                         <!-- Type -->
                         <td class="px-6 py-4">
                             <div class="flex items-center gap-2">
                                 {% if tx.type == 'DEPOT' %}
-                                    <div class="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600"><i data-lucide="arrow-down-to-line" class="w-4 h-4"></i></div>
-                                    <span class="text-sm font-bold text-slate-700">Dépôt</span>
+                                    <div class="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center text-blue-600"><i data-lucide="arrow-down-to-line" class="w-4 h-4"></i></div>
+                                    <span class="text-sm font-bold text-slate-700 dark:text-slate-300">Dépôt</span>
                                 {% elif tx.type == 'RETRAIT' %}
-                                    <div class="w-8 h-8 rounded-lg bg-orange-50 flex items-center justify-center text-orange-600"><i data-lucide="arrow-up-from-line" class="w-4 h-4"></i></div>
-                                    <span class="text-sm font-bold text-slate-700">Retrait</span>
+                                    <div class="w-8 h-8 rounded-lg bg-orange-50 dark:bg-orange-900/30 flex items-center justify-center text-orange-600"><i data-lucide="arrow-up-from-line" class="w-4 h-4"></i></div>
+                                    <span class="text-sm font-bold text-slate-700 dark:text-slate-300">Retrait</span>
                                 {% elif tx.type == 'TRANSFERT' %}
-                                    <div class="w-8 h-8 rounded-lg bg-purple-50 flex items-center justify-center text-purple-600"><i data-lucide="arrow-right-left" class="w-4 h-4"></i></div>
-                                    <span class="text-sm font-bold text-slate-700">Transfert</span>
+                                    <div class="w-8 h-8 rounded-lg bg-purple-50 dark:bg-purple-900/30 flex items-center justify-center text-purple-600"><i data-lucide="arrow-right-left" class="w-4 h-4"></i></div>
+                                    <span class="text-sm font-bold text-slate-700 dark:text-slate-300">Transfert</span>
                                 {% elif tx.type == 'SWAP' %}
-                                    <div class="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600"><i data-lucide="repeat" class="w-4 h-4"></i></div>
-                                    <span class="text-sm font-bold text-slate-700">Conversion</span>
+                                    <div class="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-900/30 flex items-center justify-center text-emerald-600"><i data-lucide="repeat" class="w-4 h-4"></i></div>
+                                    <span class="text-sm font-bold text-slate-700 dark:text-slate-300">Conversion</span>
                                 {% else %}
-                                    <div class="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-600"><i data-lucide="circle" class="w-4 h-4"></i></div>
-                                    <span class="text-sm font-bold text-slate-700">{{ tx.type }}</span>
+                                    <div class="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300"><i data-lucide="circle" class="w-4 h-4"></i></div>
+                                    <span class="text-sm font-bold text-slate-700 dark:text-slate-300">{{ tx.type }}</span>
                                 {% endif %}
                             </div>
                         </td>
 
                         <!-- Amount -->
                         <td class="px-6 py-4 text-right">
-                            <span class="text-base font-black font-mono text-slate-900">{{ tx.amount|floatformat:"0" }}</span>
+                            <span class="text-base font-black font-mono text-slate-900 dark:text-white">{{ tx.amount|floatformat:"0" }}</span>
                         </td>
 
                         <!-- Status Badge -->
                         <td class="px-6 py-4 text-right">
                             {% if tx.status == 'COMPLETED' %}
-                                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-50 text-emerald-600 border border-emerald-200">
+                                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 border border-emerald-200 dark:border-emerald-800">
                                     <div class="w-1.5 h-1.5 rounded-full bg-emerald-500"></div> Complété
                                 </span>
                             {% elif tx.status == 'PENDING' %}
-                                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-orange-50 text-orange-600 border border-orange-200">
+                                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-orange-50 dark:bg-orange-900/30 text-orange-600 border border-orange-200 dark:border-orange-800">
                                     <div class="w-1.5 h-1.5 rounded-full bg-orange-500 animate-ping"></div> En attente
                                 </span>
                             {% elif tx.status == 'FAILED' %}
-                                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-rose-50 text-rose-600 border border-rose-200">
+                                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-rose-50 dark:bg-rose-900/30 text-rose-600 border border-rose-200 dark:border-rose-800">
                                     <div class="w-1.5 h-1.5 rounded-full bg-rose-500"></div> Échoué
                                 </span>
                             {% else %}
-                                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
                                     {{ tx.status }}
                                 </span>
                             {% endif %}
@@ -123,7 +123,7 @@
 
                         <!-- Action -->
                         <td class="px-6 py-4 text-center">
-                            <a href="{% url 'dashboard:transaction_detail' tx.id %}" class="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-slate-50 text-slate-400 hover:text-brand-600 hover:bg-brand-50 transition-colors border border-slate-200/60" title="Voir les détails">
+                            <a href="{% url 'dashboard:transaction_detail' tx.id %}" class="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-slate-50 dark:bg-slate-700/50 text-slate-400 dark:text-slate-500 hover:text-brand-600 hover:bg-brand-50 dark:hover:bg-slate-700 transition-colors border border-slate-200/60 dark:border-slate-700" title="Voir les détails">
                                 <i data-lucide="eye" class="w-4 h-4"></i>
                             </a>
                         </td>
@@ -131,9 +131,9 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="6" class="px-6 py-12 text-center text-slate-500">
+                        <td colspan="6" class="px-6 py-12 text-center text-slate-500 dark:text-slate-400">
                             <div class="flex flex-col items-center justify-center">
-                                <i data-lucide="arrow-left-right" class="w-12 h-12 text-slate-300 mb-3"></i>
+                                <i data-lucide="arrow-left-right" class="w-12 h-12 text-slate-300 dark:text-slate-600 mb-3"></i>
                                 <p>Aucune transaction enregistrée.</p>
                             </div>
                         </td>
@@ -145,17 +145,17 @@
 
         <!-- Pagination -->
         {% if page_obj.has_other_pages %}
-        <div class="px-6 py-4 border-t border-slate-100 flex items-center justify-between bg-slate-50/30">
-            <p class="text-sm text-slate-500">
-                Page <span class="font-medium text-slate-900">{{ page_obj.number }}</span> sur <span class="font-medium text-slate-900">{{ page_obj.paginator.num_pages }}</span>
+        <div class="px-6 py-4 border-t border-slate-100 dark:border-slate-700/50 flex items-center justify-between bg-slate-50/30 dark:bg-slate-800/50">
+            <p class="text-sm text-slate-500 dark:text-slate-400">
+                Page <span class="font-medium text-slate-900 dark:text-white">{{ page_obj.number }}</span> sur <span class="font-medium text-slate-900 dark:text-white">{{ page_obj.paginator.num_pages }}</span>
             </p>
             <div class="flex items-center gap-2">
                 {% if page_obj.has_previous %}
-                <a href="?page={{ page_obj.previous_page_number }}" class="px-3 py-1.5 border border-slate-200 rounded-lg text-sm font-medium text-slate-600 hover:bg-white hover:text-brand-600 transition-colors">Précédent</a>
+                <a href="?page={{ page_obj.previous_page_number }}" class="px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700 hover:text-brand-600 transition-colors">Précédent</a>
                 {% endif %}
-                
+
                 {% if page_obj.has_next %}
-                <a href="?page={{ page_obj.next_page_number }}" class="px-3 py-1.5 border border-slate-200 rounded-lg text-sm font-medium text-slate-600 hover:bg-white hover:text-brand-600 transition-colors">Suivant</a>
+                <a href="?page={{ page_obj.next_page_number }}" class="px-3 py-1.5 border border-slate-200 dark:border-slate-700 rounded-lg text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700 hover:text-brand-600 transition-colors">Suivant</a>
                 {% endif %}
             </div>
         </div>

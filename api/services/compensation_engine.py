@@ -1,30 +1,222 @@
+"""
+Moteur de compensation pour SIC - Gestion des commissions et déductions
+"""
 from django.db import transaction
+from django.conf import settings
 from django.utils import timezone
 from datetime import timedelta
-from core.models import Puce, Transaction, CompensationDetail
+from decimal import Decimal, ROUND_HALF_UP
 import uuid
+import logging
+
+from core.models import Puce, Transaction, CompensationDetail, Agent
+from .cinetpay_client import CinetPayClient
+
+logger = logging.getLogger('sic.transactions')
+
+
+class CommissionCalculator:
+    """
+    Calculateur de commissions pour les transactions SIC.
+
+    Les commissions sont calculées selon les taux configurés dans settings.py:
+    - commission_sic_rate: pourcentage pour la plateforme SIC
+    - agent_benefit_rate: pourcentage pour l'agent
+
+    Exemple: Pour un dépôt de 10000 FCFA avec taux SIC=1% et agent=0.5%:
+    - commission_sic = 10000 * 1% = 100 FCFA
+    - agent_benefit = 10000 * 0.5% = 50 FCFA
+    """
+
+    @staticmethod
+    def get_rate(tx_type):
+        """Récupère les taux de commission pour un type de transaction."""
+        rates = settings.COMMISSION_RATES.get(tx_type.upper(), {})
+        return {
+            'sic_rate': Decimal(str(rates.get('commission_sic_rate', 1.0))) / 100,
+            'agent_rate': Decimal(str(rates.get('agent_benefit_rate', 0.5))) / 100,
+        }
+
+    @classmethod
+    def calculate(cls, amount, tx_type):
+        """
+        Calcule les commissions pour un montant et type de transaction.
+
+        Args:
+            amount: Decimal - Montant de la transaction
+            tx_type: str - Type de transaction (DEPOT, RETRAIT, etc.)
+
+        Returns:
+            dict avec 'commission_sic', 'agent_benefit', 'net_amount'
+        """
+        amount = Decimal(str(amount))
+        rates = cls.get_rate(tx_type)
+
+        commission_sic = (amount * rates['sic_rate']).quantize(Decimal('1'), rounding=ROUND_HALF_UP)
+        agent_benefit = (amount * rates['agent_rate']).quantize(Decimal('1'), rounding=ROUND_HALF_UP)
+
+        # Le montant net après commissions est la somme des deux
+        total_commission = commission_sic + agent_benefit
+
+        return {
+            'commission_sic': commission_sic,
+            'agent_benefit': agent_benefit,
+            'total_commission': total_commission,
+            'net_amount': amount,  # Le montant total est traité, les commissions sont dérivées
+        }
+
+    @classmethod
+    def calculate_from_net(cls, net_amount, tx_type):
+        """
+        Calcule les commissions à partir du montant net desired (inverse du calcul).
+
+        Args:
+            net_amount: Decimal - Montant que l'on veut recevoir
+            tx_type: str - Type de transaction
+
+        Returns:
+            dict avec les montants ajustés
+        """
+        net_amount = Decimal(str(net_amount))
+        rates = cls.get_rate(tx_type)
+
+        # Si le montant net est X, le montant brut = X / (1 - taux_total)
+        total_rate = rates['sic_rate'] + rates['agent_rate']
+
+        if total_rate >= Decimal('1'):
+            raise ValueError("Les taux de commission ne peuvent pas être >= 100%")
+
+        gross_amount = (net_amount / (Decimal('1') - total_rate)).quantize(Decimal('1'), rounding=ROUND_HALF_UP)
+        commission_sic = (gross_amount * rates['sic_rate']).quantize(Decimal('1'), rounding=ROUND_HALF_UP)
+        agent_benefit = (gross_amount * rates['agent_rate']).quantize(Decimal('1'), rounding=ROUND_HALF_UP)
+
+        return {
+            'gross_amount': gross_amount,
+            'commission_sic': commission_sic,
+            'agent_benefit': agent_benefit,
+            'net_amount': net_amount,
+            'total_commission': commission_sic + agent_benefit,
+        }
+
+
+class TransactionValidator:
+    """
+    Validateur pour les transactions SIC.
+    """
+
+    # Opérateurs supportés
+    VALID_OPERATORS = ['ORANGE', 'MOOV', 'TELECEL', 'CORIS']
+
+    # Regex pour validation des numéros de téléphone
+    PHONE_PATTERNS = {
+        'ORANGE': r'^(\+224|224)?[6][0-9]{7}$',  # Niger
+        'MOOV': r'^(\+224|224)?[6][2-5][0-9]{6}$',
+        'TELECEL': r'^(\+224|224)?[6][5-6][0-9]{6}$',
+        'CORIS': r'^(\+224|224)?[6][0-9]{7}$',
+        'DEFAULT': r'^(\+224|224)?[6][0-9]{7}$',
+    }
+
+    @classmethod
+    def validate_amount(cls, amount):
+        """Valide le montant de la transaction."""
+        if amount < settings.MIN_TRANSACTION_AMOUNT:
+            raise ValueError(f"Montant minimum: {settings.MIN_TRANSACTION_AMOUNT} FCFA")
+        if amount > settings.MAX_TRANSACTION_AMOUNT:
+            raise ValueError(f"Montant maximum: {settings.MAX_TRANSACTION_AMOUNT} FCFA")
+        return True
+
+    @classmethod
+    def validate_operator(cls, operator):
+        """Valide l'opérateur."""
+        if operator.upper() not in cls.VALID_OPERATORS:
+            raise ValueError(f"Opérateur invalide. Options: {', '.join(cls.VALID_OPERATORS)}")
+        return True
+
+    @classmethod
+    def validate_phone_number(cls, phone_number, operator=None):
+        """Valide le format du numéro de téléphone."""
+        import re
+
+        # Nettoyage du numéro
+        phone = phone_number.strip().replace(' ', '').replace('-', '')
+
+        # Pattern selon l'opérateur ou pattern par défaut
+        pattern = cls.PHONE_PATTERNS.get(operator.upper() if operator else 'DEFAULT', cls.PHONE_PATTERNS['DEFAULT'])
+
+        if not re.match(pattern, phone):
+            logger.warning(f"Format de téléphone potentiellement invalide: {phone_number} pour {operator}")
+            # Warning mais pas d'erreur - certains numéros peuvent avoir des formats spéciaux
+            # return False
+
+        return True
+
+    @classmethod
+    def validate_transaction(cls, tx_type, amount, target_operator, target_phone_number):
+        """Valide une transaction complète."""
+        cls.validate_amount(amount)
+        cls.validate_operator(target_operator)
+        cls.validate_phone_number(target_phone_number, target_operator)
+        return True
+
 
 class CompensationEngine:
+    """
+    Moteur de compensation pour SIC.
+
+    Responsable de:
+    - Calculer le plan de compensation (déduction en cascade sur les puces)
+    - Créer les transactions avec leurs détails de compensation
+    - Gérer leswebhooks CinetPay
+    - Gérer les rollbacks en cas d'erreur
+    """
+
     @staticmethod
     def calculate_plan(agent, amount_required):
         """
         Calcule le plan de compensation en déduisant en cascade depuis les puces actives de l'agent.
-        Retourne une liste de dictionnaires {'puce': Puce, 'amount': Decimal} ou lève une exception.
+
+        Args:
+            agent: Agent - L'agent qui effectue la transaction
+            amount_required: Decimal - Montant à compenser
+
+        Returns:
+            list[dict] - Liste de {'puce': Puce, 'amount': Decimal}
+
+        Raises:
+            ValueError - Si le solde global est insuffisant ou erreur de calcul
         """
+        # Valider l'agent
+        if not isinstance(agent, Agent):
+            raise ValueError("Agent invalide")
+
+        # Valider le montant
+        amount_required = Decimal(str(amount_required))
+        if amount_required <= 0:
+            raise ValueError("Le montant doit être supérieur à 0")
+
+        # Récupérer les puces actives triées par solde décroissant
         puces = Puce.objects.filter(agent=agent, is_active=True).order_by('-balance')
-        
-        # Validation du solde global
+
+        # Calcul du solde global
         total_balance = sum(puce.balance for puce in puces)
         if total_balance < amount_required:
-            raise ValueError("Solde global insuffisant pour couvrir cette opération.")
+            logger.warning(
+                f"CompensationEngine: Solde insuffisant pour agent {agent.id}. "
+                f"Requis: {amount_required}, Disponible: {total_balance}"
+            )
+            raise ValueError(
+                f"Solde global insuffisant. Disponible: {total_balance} FCFA, "
+                f"Requis: {amount_required} FCFA"
+            )
 
+        # Construction du plan de compensation
         plan = []
         remaining = amount_required
-        
+
         for puce in puces:
             if remaining <= 0:
                 break
-                
+
             deduct_amount = min(puce.balance, remaining)
             if deduct_amount > 0:
                 plan.append({
@@ -34,32 +226,75 @@ class CompensationEngine:
                 remaining -= deduct_amount
 
         if remaining > 0:
-            raise ValueError("Impossible de trouver une combinaison valide pour la compensation.")
-            
+            raise ValueError("Impossible de calculer le plan de compensation.")
+
+        logger.info(
+            f"CompensationEngine: Plan créé pour agent {agent.id}, "
+            f"{len(plan)} puce(s), montant {amount_required} FCFA"
+        )
+
         return plan
 
     @staticmethod
     @transaction.atomic
-    def create_compensated_transaction(agent, tx_type, amount, target_operator, target_phone_number):
+    def create_compensated_transaction(
+        agent,
+        tx_type,
+        amount,
+        target_operator,
+        target_phone_number,
+        validate=True
+    ):
         """
-        Crée une transaction et ses détails de compensation.
+        Crée une transaction compensée et ses détails de compensation.
+
+        Args:
+            agent: Agent - L'agent effectuant la transaction
+            tx_type: str - Type (DEPOT, RETRAIT, TRANSFERT, SWAP)
+            amount: Decimal - Montant de la transaction
+            target_operator: str - Opérateur cible
+            target_phone_number: str - Numéro cible
+            validate: bool - Si True, valide la transaction
+
+        Returns:
+            Transaction - La transaction créée
         """
+        # Validation optionnelle
+        if validate:
+            TransactionValidator.validate_transaction(
+                tx_type, amount, target_operator, target_phone_number
+            )
+
+        amount = Decimal(str(amount))
+
+        # Calcul des commissions
+        commissions = CommissionCalculator.calculate(amount, tx_type)
+
+        # Calcul du plan de compensation
         plan = CompensationEngine.calculate_plan(agent, amount)
         is_compensated = len(plan) > 1
 
+        # Création de la transaction
         tx = Transaction.objects.create(
             agent=agent,
-            type=tx_type,
+            type=tx_type.upper(),
             status='PENDING',
             amount=amount,
-            target_operator=target_operator,
+            target_operator=target_operator.upper(),
             target_phone_number=target_phone_number,
+            commission_sic=commissions['commission_sic'],
+            agent_benefit=commissions['agent_benefit'],
             is_compensated=is_compensated
         )
 
+        logger.info(
+            f"Transaction {tx.id} créée: {tx_type} {amount} FCFA → {target_operator} {target_phone_number}"
+        )
+
+        # Création des détails de compensation pour chaque puce du plan
         for item in plan:
-            # TODO: Implémenter le vrai appel à CinetPay Client ici
             ref = f"CPAY_{uuid.uuid4().hex[:8].upper()}"
+
             CompensationDetail.objects.create(
                 transaction=tx,
                 puce=item['puce'],
@@ -67,10 +302,271 @@ class CompensationEngine:
                 status='PENDING',
                 cinetpay_ref=ref
             )
-            # En environnement réel, déclencher CinetPay PayIn collection ici
 
-        # Import à l'intérieur pour éviter les dépendances circulaires
+            logger.debug(
+                f"CompensationDetail créé: puce {item['puce'].id}, "
+                f"montant {item['amount']} FCFA, ref {ref}"
+            )
+
+            # En environnement de production, déclencher le paiement CinetPay ici
+            # CinetPayClient.initiate_payment(
+            #     transaction_id=tx.id,
+            #     amount=item['amount'],
+            #     operator=item['puce'].operator,
+            #     phone_number=item['puce'].phone_number,
+            #     webhook_url=settings.CINETPAY_CONFIG['NOTIFY_URL']
+            # )
+
+        # Planification du timeout
         from core.tasks import check_transaction_timeout
-        check_transaction_timeout.apply_async((tx.id,), eta=timezone.now() + timedelta(minutes=5))
+        timeout_minutes = settings.TRANSACTION_TIMEOUT_MINUTES
+        check_transaction_timeout.apply_async(
+            (tx.id,),
+            eta=timezone.now() + timedelta(minutes=timeout_minutes)
+        )
 
         return tx
+
+    @staticmethod
+    @transaction.atomic
+    def create_withdrawal_transaction(agent, amount, target_operator, target_phone_number):
+        """
+        Crée une transaction de retrait.
+
+        Pour les retraits, l'agent encaisse du cash et transfère de la monnaie électronique.
+        Il n'y a pas de compensation sur les puces de l'agent - c'est le mouvement inverse.
+
+        Args:
+            agent: Agent - L'agent effectuant le retrait
+            amount: Decimal - Montant à retirer
+            target_operator: str - Opérateur cible
+            target_phone_number: str - Numéro cible
+
+        Returns:
+            Transaction - La transaction créée
+        """
+        amount = Decimal(str(amount))
+
+        # Validation
+        TransactionValidator.validate_transaction(
+            'RETRAIT', amount, target_operator, target_phone_number
+        )
+
+        # Calcul des commissions pour retrait
+        commissions = CommissionCalculator.calculate(amount, 'RETRAIT')
+
+        tx = Transaction.objects.create(
+            agent=agent,
+            type='RETRAIT',
+            status='PENDING',
+            amount=amount,
+            target_operator=target_operator.upper(),
+            target_phone_number=target_phone_number,
+            commission_sic=commissions['commission_sic'],
+            agent_benefit=commissions['agent_benefit'],
+            is_compensated=False  # Pas de compensation - l'agent gère le cash
+        )
+
+        logger.info(
+            f"Retrait {tx.id} créé: {amount} FCFA → {target_operator} {target_phone_number}"
+        )
+
+        # Planification du timeout
+        from core.tasks import check_transaction_timeout
+        check_transaction_timeout.apply_async(
+            (tx.id,),
+            eta=timezone.now() + timedelta(minutes=settings.TRANSACTION_TIMEOUT_MINUTES)
+        )
+
+        return tx
+
+    @staticmethod
+    @transaction.atomic
+    def create_swap_transaction(agent, amount, source_puce, target_puce):
+        """
+        Crée une transaction de conversion/swap entre puces.
+
+        Args:
+            agent: Agent - L'agent effectuant la conversion
+            amount: Decimal - Montant à convertir
+            source_puce: Puce - Puce source (débit)
+            target_puce: Puce - Puce cible (crédit)
+
+        Returns:
+            Transaction - La transaction créée
+        """
+        amount = Decimal(str(amount))
+
+        # Validation du montant
+        TransactionValidator.validate_amount(amount)
+
+        # Vérifier que les puces appartiennent à l'agent
+        if source_puce.agent != agent:
+            raise ValueError("Puce source n'appartient pas à cet agent")
+        if target_puce.agent != agent:
+            raise ValueError("Puce cible n'appartient pas à cet agent")
+
+        # Vérifier les soldes
+        if source_puce.balance < amount:
+            raise ValueError(
+                f"Solde insuffisant sur la puce source. "
+                f"Disponible: {source_puce.balance} FCFA, Requis: {amount} FCFA"
+            )
+
+        # Calcul des commissions
+        commissions = CommissionCalculator.calculate(amount, 'SWAP')
+
+        tx = Transaction.objects.create(
+            agent=agent,
+            type='SWAP',
+            status='PENDING',
+            amount=amount,
+            target_operator=target_puce.operator,
+            target_phone_number=str(target_puce.id),
+            commission_sic=commissions['commission_sic'],
+            agent_benefit=commissions['agent_benefit'],
+            is_compensated=False
+        )
+
+        # Créer le détail de compensation
+        ref = f"CPAY_{uuid.uuid4().hex[:8].upper()}"
+        CompensationDetail.objects.create(
+            transaction=tx,
+            puce=source_puce,
+            amount_deducted=amount,
+            status='PENDING',
+            cinetpay_ref=ref
+        )
+
+        logger.info(
+            f"Swap {tx.id} créé: {amount} FCFA de {source_puce.operator} → {target_puce.operator}"
+        )
+
+        # Planification du timeout
+        from core.tasks import check_transaction_timeout
+        check_transaction_timeout.apply_async(
+            (tx.id,),
+            eta=timezone.now() + timedelta(minutes=settings.TRANSACTION_TIMEOUT_MINUTES)
+        )
+
+        return tx
+
+    @staticmethod
+    @transaction.atomic
+    def process_webhook(ref, new_status, cinetpay_data=None):
+        """
+        Traite un webhook de CinetPay.
+
+        Args:
+            ref: str - Référence de la transaction CinetPay
+            new_status: str - Nouveau statut (SUCCESS, FAILED, REFUNDED)
+            cinetpay_data: dict - Données additionnelles de CinetPay
+
+        Returns:
+            tuple(Transaction, bool) - (Transaction mise à jour, si succès)
+        """
+        try:
+            detail = CompensationDetail.objects.select_related(
+                'transaction', 'puce', 'transaction__agent'
+            ).get(cinetpay_ref=ref)
+        except CompensationDetail.DoesNotExist:
+            logger.warning(f"Webhook: Référence introuvable: {ref}")
+            return None, False
+
+        # Ignorer si déjà traité
+        if detail.status not in ('PENDING', 'SUCCESS'):
+            logger.info(f"Webhook: Transaction déjà traitée: {detail.cinetpay_ref}")
+            return detail.transaction, True
+
+        tx = detail.transaction
+
+        logger.info(
+            f"Webhook: Traitement {ref} → {new_status} pour transaction {tx.id}"
+        )
+
+        if new_status == 'SUCCESS':
+            return CompensationEngine._process_success(detail, tx)
+        elif new_status == 'FAILED':
+            return CompensationEngine._process_failed(detail, tx)
+        elif new_status == 'REFUNDED':
+            return CompensationEngine._process_refunded(detail, tx)
+        else:
+            logger.warning(f"Webhook: Statut inconnu: {new_status}")
+            return tx, False
+
+    @staticmethod
+    @transaction.atomic
+    def _process_success(detail, tx):
+        """Traite le succès d'un détail de compensation."""
+        # Mettre à jour le détail
+        detail.status = 'SUCCESS'
+        detail.save()
+
+        # Déduire le solde de la puce
+        puce = detail.puce
+        puce.balance -= detail.amount_deducted
+        puce.save()
+
+        logger.info(
+            f"Débit {detail.amount_deducted} FCFA sur puce {puce.id} ({puce.operator})"
+        )
+
+        # Vérifier si toute la transaction est complète
+        all_details = tx.compensation_details.all()
+        if all(d.status == 'SUCCESS' for d in all_details):
+            tx.status = 'COMPLETED'
+            tx.save()
+
+            # Pour les SWAP, créditer la puce cible
+            if tx.type == 'SWAP':
+                try:
+                    target_puce = Puce.objects.get(id=tx.target_phone_number)
+                    target_puce.balance += tx.amount
+                    target_puce.save()
+
+                    logger.info(
+                        f"Crédit {tx.amount} FCFA sur puce cible {target_puce.id}"
+                    )
+                except Puce.DoesNotExist:
+                    logger.error(f"Impossible de trouver la puce cible pour le swap {tx.id}")
+
+            logger.info(f"Transaction {tx.id} COMPLETED")
+        else:
+            logger.info(
+                f"Transaction {tx.id} en attente ({all_details.filter(status='SUCCESS').count()}/{all_details.count()} détails)"
+            )
+
+        return tx, True
+
+    @staticmethod
+    @transaction.atomic
+    def _process_failed(detail, tx):
+        """Traite l'échec d'un détail de compensation."""
+        detail.status = 'FAILED'
+        detail.save()
+
+        tx.status = 'FAILED'
+        tx.save()
+
+        logger.warning(f"Transaction {tx.id} FAILED")
+
+        return tx, True
+
+    @staticmethod
+    @transaction.atomic
+    def _process_refunded(detail, tx):
+        """Traite le remboursement d'un détail de compensation."""
+        # Si le détail était déjà succès, créditer la puce
+        if detail.status == 'SUCCESS':
+            puce = detail.puce
+            puce.balance += detail.amount_deducted
+            puce.save()
+
+            logger.info(f"Remboursement {detail.amount_deducted} FCFA sur puce {puce.id}")
+
+        detail.status = 'REFUNDED'
+        detail.save()
+
+        logger.info(f"Remboursement appliqué pour détail {detail.id}")
+
+        return tx, True

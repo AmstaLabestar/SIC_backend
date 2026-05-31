@@ -6,8 +6,12 @@ __pycache__/
 .Python
 env/
 .env
+.env.local
 db.sqlite3
 *.log
 .DS_Store
 .idea/
 .vscode/
+
+# Docker
+.dockerignore

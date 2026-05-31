@@ -1,0 +1,13 @@
+# SIC Mobile - Assets
+
+Ce dossier contient les ressources de l'application SIC Mobile.
+
+## Dossiers
+
+- `images/` - Images et logos
+- `icons/` - Icônes SVG personnalisées
+- `animations/` - Animations Lottie
+
+## Notes
+
+Ajoutez vos fichiers de ressources ici avant de lancer l'application.

@@ -50,27 +50,137 @@ def logout_view(request):
 
 @staff_member_required(login_url='dashboard:login')
 def home(request):
+    import json
+    from django.db.models.functions import TruncDate, TruncWeek, TruncMonth
+    from django.contrib.auth.models import User
+
     total_agents = Agent.objects.count()
     pending_kyc = Agent.objects.filter(kyc_status='PENDING').count()
-    
+
     # Base aggregated data
     transactions_agg = Transaction.objects.filter(status='COMPLETED').aggregate(
         total_volume=Sum('amount'),
         total_count=Count('id'),
         total_profit=Sum('commission_sic')
     )
-    
+
     now = timezone.now()
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     week_start = today_start - timedelta(days=now.weekday())
     month_start = today_start.replace(day=1)
-    
+
     profit_today = Transaction.objects.filter(status='COMPLETED', created_at__gte=today_start).aggregate(Sum('commission_sic'))['commission_sic__sum'] or 0
     profit_week = Transaction.objects.filter(status='COMPLETED', created_at__gte=week_start).aggregate(Sum('commission_sic'))['commission_sic__sum'] or 0
     profit_month = Transaction.objects.filter(status='COMPLETED', created_at__gte=month_start).aggregate(Sum('commission_sic'))['commission_sic__sum'] or 0
 
     # Profit by Operator
     operator_profits = Transaction.objects.filter(status='COMPLETED').values('target_operator').annotate(profit=Sum('commission_sic')).order_by('-profit')
+
+    # =========================================================================
+    # STATISTIQUES UTILISATEURS (inscriptions par jour/semaine/mois)
+    # =========================================================================
+
+    # Utilisateurs par jour (30 derniers jours)
+    thirty_days_ago = today_start - timedelta(days=30)
+    users_per_day = (
+        Agent.objects.filter(created_at__gte=thirty_days_ago)
+        .annotate(date=TruncDate('created_at'))
+        .values('date')
+        .annotate(count=Count('id'))
+        .order_by('date')
+    )
+
+    # Utilisateurs par semaine (12 dernières semaines)
+    twelve_weeks_ago = today_start - timedelta(weeks=12)
+    users_per_week = (
+        Agent.objects.filter(created_at__gte=twelve_weeks_ago)
+        .annotate(week=TruncWeek('created_at'))
+        .values('week')
+        .annotate(count=Count('id'))
+        .order_by('week')
+    )
+
+    # Utilisateurs par mois (12 derniers mois)
+    twelve_months_ago = today_start - timedelta(days=365)
+    users_per_month = (
+        Agent.objects.filter(created_at__gte=twelve_months_ago)
+        .annotate(month=TruncMonth('created_at'))
+        .values('month')
+        .annotate(count=Count('id'))
+        .order_by('month')
+    )
+
+    # Totaux utilisateurs par période
+    agents_today = Agent.objects.filter(created_at__gte=today_start).count()
+    agents_this_week = Agent.objects.filter(created_at__gte=week_start).count()
+    agents_this_month = Agent.objects.filter(created_at__gte=month_start).count()
+
+    # =========================================================================
+    # MONTANTS ÉCHANGÉS par jour/semaine/mois
+    # =========================================================================
+
+    # Montants par jour (30 derniers jours)
+    volume_per_day = (
+        Transaction.objects.filter(status='COMPLETED', created_at__gte=thirty_days_ago)
+        .annotate(date=TruncDate('created_at'))
+        .values('date')
+        .annotate(total=Sum('amount'), count=Count('id'))
+        .order_by('date')
+    )
+
+    # Montants par semaine (12 dernières semaines)
+    volume_per_week = (
+        Transaction.objects.filter(status='COMPLETED', created_at__gte=twelve_weeks_ago)
+        .annotate(week=TruncWeek('created_at'))
+        .values('week')
+        .annotate(total=Sum('amount'), count=Count('id'))
+        .order_by('week')
+    )
+
+    # Montants par mois (12 derniers mois)
+    volume_per_month = (
+        Transaction.objects.filter(status='COMPLETED', created_at__gte=twelve_months_ago)
+        .annotate(month=TruncMonth('created_at'))
+        .values('month')
+        .annotate(total=Sum('amount'), count=Count('id'))
+        .order_by('month')
+    )
+
+    # Totaux montants par période
+    volume_today = Transaction.objects.filter(status='COMPLETED', created_at__gte=today_start).aggregate(total=Sum('amount'))['total'] or 0
+    volume_this_week = Transaction.objects.filter(status='COMPLETED', created_at__gte=week_start).aggregate(total=Sum('amount'))['total'] or 0
+    volume_this_month = Transaction.objects.filter(status='COMPLETED', created_at__gte=month_start).aggregate(total=Sum('amount'))['total'] or 0
+    tx_count_today = Transaction.objects.filter(status='COMPLETED', created_at__gte=today_start).count()
+    tx_count_week = Transaction.objects.filter(status='COMPLETED', created_at__gte=week_start).count()
+    tx_count_month = Transaction.objects.filter(status='COMPLETED', created_at__gte=month_start).count()
+
+    # =========================================================================
+    # Préparer les données JSON pour les graphiques Chart.js
+    # =========================================================================
+
+    # Données utilisateurs par jour
+    chart_users_daily_labels = [entry['date'].strftime('%d/%m') for entry in users_per_day]
+    chart_users_daily_data = [entry['count'] for entry in users_per_day]
+
+    # Données utilisateurs par semaine
+    chart_users_weekly_labels = [entry['week'].strftime('%d/%m') for entry in users_per_week]
+    chart_users_weekly_data = [entry['count'] for entry in users_per_week]
+
+    # Données utilisateurs par mois
+    chart_users_monthly_labels = [entry['month'].strftime('%b %Y') for entry in users_per_month]
+    chart_users_monthly_data = [entry['count'] for entry in users_per_month]
+
+    # Données volumes par jour
+    chart_volume_daily_labels = [entry['date'].strftime('%d/%m') for entry in volume_per_day]
+    chart_volume_daily_data = [float(entry['total']) for entry in volume_per_day]
+
+    # Données volumes par semaine
+    chart_volume_weekly_labels = [entry['week'].strftime('%d/%m') for entry in volume_per_week]
+    chart_volume_weekly_data = [float(entry['total']) for entry in volume_per_week]
+
+    # Données volumes par mois
+    chart_volume_monthly_labels = [entry['month'].strftime('%b %Y') for entry in volume_per_month]
+    chart_volume_monthly_data = [float(entry['total']) for entry in volume_per_month]
 
     context = {
         'total_agents': total_agents,
@@ -81,7 +191,31 @@ def home(request):
         'profit_today': profit_today,
         'profit_week': profit_week,
         'profit_month': profit_month,
-        'operator_profits': operator_profits
+        'operator_profits': operator_profits,
+        # Stats utilisateurs
+        'agents_today': agents_today,
+        'agents_this_week': agents_this_week,
+        'agents_this_month': agents_this_month,
+        # Stats volumes
+        'volume_today': volume_today,
+        'volume_this_week': volume_this_week,
+        'volume_this_month': volume_this_month,
+        'tx_count_today': tx_count_today,
+        'tx_count_week': tx_count_week,
+        'tx_count_month': tx_count_month,
+        # Données graphiques JSON
+        'chart_users_daily_labels': json.dumps(chart_users_daily_labels),
+        'chart_users_daily_data': json.dumps(chart_users_daily_data),
+        'chart_users_weekly_labels': json.dumps(chart_users_weekly_labels),
+        'chart_users_weekly_data': json.dumps(chart_users_weekly_data),
+        'chart_users_monthly_labels': json.dumps(chart_users_monthly_labels),
+        'chart_users_monthly_data': json.dumps(chart_users_monthly_data),
+        'chart_volume_daily_labels': json.dumps(chart_volume_daily_labels),
+        'chart_volume_daily_data': json.dumps(chart_volume_daily_data),
+        'chart_volume_weekly_labels': json.dumps(chart_volume_weekly_labels),
+        'chart_volume_weekly_data': json.dumps(chart_volume_weekly_data),
+        'chart_volume_monthly_labels': json.dumps(chart_volume_monthly_labels),
+        'chart_volume_monthly_data': json.dumps(chart_volume_monthly_data),
     }
     return render(request, 'dashboard/home.html', context)
 

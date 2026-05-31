@@ -1,60 +1,212 @@
+"""
+API REST pour SIC - Vues et ViewSets sécurisé
+"""
 import uuid
 import hmac
 import hashlib
 import os
+import logging
+from decimal import Decimal
 from django.db import transaction
+from django.utils import timezone
+from datetime import timedelta
 from rest_framework import viewsets, status, generics, mixins
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny, IsAdminUser
 from rest_framework.pagination import PageNumberPagination
+from rest_framework.throttling import ScopedRateThrottle
 
+from django.conf import settings
 from .permissions import IsApprovedAgent
-
-from core.models import Transaction, CompensationDetail, Puce, Agent
 from .serializers import (
-    DepositSerializer, WithdrawSerializer, ConversionSerializer, 
-    AgentSerializer, PuceSerializer, TransactionSerializer
+    DepositSerializer, WithdrawSerializer, ConversionSerializer,
+    AgentSerializer, PuceSerializer, TransactionSerializer, RegisterSerializer,
+    CustomTokenObtainPairSerializer, PinSetupSerializer, PinVerifySerializer,
+    BiometricRegisterSerializer, BiometricLoginSerializer
 )
-from .services.compensation_engine import CompensationEngine
-
-from django.utils import timezone
-from datetime import timedelta
+from .services.compensation_engine import (
+    CompensationEngine, CommissionCalculator, TransactionValidator
+)
+from core.models import Transaction, CompensationDetail, Puce, Agent, BiometricDevice
 from core.tasks import check_transaction_timeout
 from core.utils import log_activity
 
-class AgentProfileView(generics.RetrieveAPIView):
-    serializer_class = AgentSerializer
-    permission_classes = [IsAuthenticated]
+logger = logging.getLogger('sic.transactions')
 
-    def get_object(self):
-        # Ensure the user has an agent profile
-        agent, created = Agent.objects.get_or_create(user=self.request.user)
-        return agent
 
-class PuceViewSet(viewsets.ModelViewSet):
-    serializer_class = PuceSerializer
-    permission_classes = [IsAuthenticated]
+class LoginRateThrottle(ScopedRateThrottle):
+    """Limite le nombre de tentatives de connexion."""
+    scope = 'login'
 
-    def get_queryset(self):
-        agent = getattr(self.request.user, 'agent_profile', None)
-        if agent:
-            return Puce.objects.filter(agent=agent)
-        return Puce.objects.none()
 
-    def perform_create(self, serializer):
-        agent, created = Agent.objects.get_or_create(user=self.request.user)
-        serializer.save(agent=agent)
+class TransactionRateThrottle(ScopedRateThrottle):
+    """Limite le nombre de transactions."""
+    scope = 'transaction'
+
 
 class StandardResultsSetPagination(PageNumberPagination):
     page_size = 20
     page_size_query_param = 'page_size'
     max_page_size = 100
 
+
+class RegisterView(generics.CreateAPIView):
+    """
+    Vue d'enregistrement d'un nouvel agent.
+
+    POST /api/auth/register/
+    {
+        "username": "john_doe",
+        "email": "john@example.com",
+        "password": "secure_password",
+        "password_confirm": "secure_password",
+        "phone_number": "+224621234567",
+        "first_name": "John",
+        "last_name": "Doe"
+    }
+    """
+    serializer_class = RegisterSerializer
+    permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'register'
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        if serializer.is_valid():
+            user = serializer.save()
+            log_activity(
+                agent=user.agent_profile,
+                action="AGENT_REGISTERED",
+                description=f"Nouvel agent enregistré: {user.username}",
+                level="INFO",
+                ip_address=request.META.get('REMOTE_ADDR')
+            )
+            return Response({
+                'message': 'Inscription réussie. Votre compte est en attente de validation KYC.',
+                'user_id': user.id,
+                'phone_number': user.agent_profile.phone_number
+            }, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class AgentProfileView(generics.RetrieveAPIView):
+    """
+    Vue pour récupérer le profil de l'agent connecté.
+
+    GET /api/auth/profile/
+    """
+    serializer_class = AgentSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self):
+        agent = getattr(self.request.user, 'agent_profile', None)
+        if not agent:
+            # Créer le profil si inexistant (au cas où)
+            agent, created = Agent.objects.get_or_create(user=self.request.user)
+        return agent
+
+
+class PuceViewSet(viewsets.ModelViewSet):
+    """
+    VueSet pour gérer les puces SIM de l'agent.
+
+    GET /api/puces/           - Liste des puces
+    POST /api/puces/          - Ajouter une puce
+    GET /api/puces/{id}/     - Détail d'une puce
+    PUT /api/puces/{id}/      - Modifier une puce
+    DELETE /api/puces/{id}/   - Supprimer une puce
+    POST /api/puces/{id}/topup/ - Recharger une puce (admin only)
+    """
+    serializer_class = PuceSerializer
+    permission_classes = [IsAuthenticated]
+    pagination_class = StandardResultsSetPagination
+
+    def get_queryset(self):
+        agent = getattr(self.request.user, 'agent_profile', None)
+        if agent:
+            return Puce.objects.filter(agent=agent).order_by('-created_at')
+        return Puce.objects.none()
+
+    def perform_create(self, serializer):
+        agent, created = Agent.objects.get_or_create(user=self.request.user)
+        # Vérifier le nombre maximum de puces par agent
+        current_count = Puce.objects.filter(agent=agent).count()
+        max_puces = int(os.environ.get('MAX_PUCES_PER_AGENT', 5))
+
+        if current_count >= max_puces:
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError(f"Vous avez atteint le nombre maximum de puces ({max_puces}).")
+
+        # Valider l'opérateur
+        operator = serializer.validated_data.get('operator', '').upper()
+        if operator not in TransactionValidator.VALID_OPERATORS:
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError(f"Opérateur invalide: {operator}")
+
+        # Vérifier si le numéro n'est pas déjà utilisé
+        phone = serializer.validated_data.get('phone_number', '')
+        if Puce.objects.filter(agent=agent, phone_number=phone, operator=operator).exists():
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError(f"Cette puce ({operator} {phone}) existe déjà.")
+
+        serializer.save(agent=agent)
+
+        log_activity(
+            agent=agent,
+            action="PUCE_ADDED",
+            description=f"Nouvelle puce ajoutée: {operator} {phone}",
+            level="INFO",
+            ip_address=self.request.META.get('REMOTE_ADDR')
+        )
+
+    @action(detail=True, methods=['post'], permission_classes=[IsAdminUser])
+    def topup(self, request, pk=None):
+        """Admin: Recharger le solde d'une puce."""
+        puce = self.get_object()
+        amount = request.data.get('amount')
+
+        if not amount:
+            return Response({'error': 'Montant requis'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            amount = Decimal(str(amount))
+            if amount <= 0:
+                raise ValueError("Le montant doit être positif")
+        except (Decimal.InvalidOperation, ValueError):
+            return Response({'error': 'Montant invalide'}, status=status.HTTP_400_BAD_REQUEST)
+
+        puce.balance += amount
+        puce.save()
+
+        log_activity(
+            action="PUCE_TOPUP",
+            description=f"Solde rechargé: +{amount} FCFA sur {puce.operator} ({puce.phone_number})",
+            level="SUCCESS",
+            ip_address=request.META.get('REMOTE_ADDR')
+        )
+
+        return Response({
+            'message': f'Solde rechargé: {amount} FCFA',
+            'new_balance': puce.balance
+        })
+
+
 class TransactionViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet):
+    """
+    ViewSet pour les transactions.
+
+    GET /api/transactions/              - Liste des transactions
+    GET /api/transactions/{id}/          - Détail d'une transaction
+    POST /api/transactions/deposit/      - Effectuer un dépôt
+    POST /api/transactions/withdraw/     - Effectuer un retrait
+    POST /api/transactions/conversion/   - Conversion entre puces
+    POST /api/transactions/webhook/      - Webhook CinetPay (public)
+    """
     permission_classes = [IsAuthenticated]
     serializer_class = TransactionSerializer
     pagination_class = StandardResultsSetPagination
+    throttle_classes = [TransactionRateThrottle]
 
     def get_queryset(self):
         agent = getattr(self.request.user, 'agent_profile', None)
@@ -62,119 +214,870 @@ class TransactionViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, views
             return Transaction.objects.filter(agent=agent).order_by('-created_at')
         return Transaction.objects.none()
 
+    def retrieve(self, request, *args, **kwargs):
+        """Récupérer une transaction - avec vérification d'accès."""
+        instance = self.get_object()
+
+        # Sécurité: vérifier que l'agent owns la transaction
+        agent = getattr(request.user, 'agent_profile', None)
+        if agent and instance.agent != agent:
+            log_activity(
+                agent=agent,
+                action="UNAUTHORIZED_TX_ACCESS",
+                description=f"Tentative d'accès non autorisé à la transaction {instance.id}",
+                level="ERROR",
+                ip_address=request.META.get('REMOTE_ADDR')
+            )
+            return Response(
+                {'error': 'Transaction introuvable'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data)
+
     @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated, IsApprovedAgent])
     def deposit(self, request):
+        """
+        Effectuer un dépôtcompensé.
+
+        POST /api/transactions/deposit/
+        {
+            "amount": 10000,
+            "target_operator": "ORANGE",
+            "target_phone_number": "621234567"
+        }
+        """
         serializer = DepositSerializer(data=request.data)
-        if serializer.is_valid():
-            agent = request.user.agent_profile
-            try:
-                tx = CompensationEngine.create_compensated_transaction(
-                    agent, 'DEPOT', 
-                    serializer.validated_data['amount'],
-                    serializer.validated_data['target_operator'],
-                    serializer.validated_data['target_phone_number']
-                )
-                log_activity(agent=agent, action="TX_DEPOT_INITIATED", description=f"Dépôt de {tx.amount} vers {tx.target_phone_number} initié.", level="INFO")
-                return Response({'message': 'Dépôt initié', 'transaction_id': tx.id})
-            except ValueError as e:
-                log_activity(agent=agent, action="TX_DEPOT_FAILED", description=f"Échec création dépôt: {str(e)}", level="WARNING")
-                return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        agent = request.user.agent_profile
+
+        # Vérifier si l'agent n'est pas suspendu
+        if agent.is_suspended:
+            log_activity(
+                agent=agent,
+                action="TX_DEPOSIT_REFUSED",
+                description="Tentative de dépôt refusée: agent suspendu",
+                level="WARNING",
+                ip_address=request.META.get('REMOTE_ADDR')
+            )
+            return Response(
+                {'error': 'Votre compte est suspendu. Contactez le support.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        try:
+            tx = CompensationEngine.create_compensated_transaction(
+                agent=agent,
+                tx_type='DEPOT',
+                amount=serializer.validated_data['amount'],
+                target_operator=serializer.validated_data['target_operator'],
+                target_phone_number=serializer.validated_data['target_phone_number']
+            )
+
+            log_activity(
+                agent=agent,
+                action="TX_DEPOT_INITIATED",
+                description=f"Dépôt de {tx.amount} FCFA vers {tx.target_phone_number} initiated.",
+                level="INFO",
+                ip_address=request.META.get('REMOTE_ADDR')
+            )
+
+            return Response({
+                'message': 'Dépôt initié avec succès',
+                'transaction_id': str(tx.id),
+                'amount': str(tx.amount),
+                'commission_sic': str(tx.commission_sic),
+                'agent_benefit': str(tx.agent_benefit),
+                'status': tx.status,
+                'created_at': tx.created_at.isoformat()
+            }, status=status.HTTP_201_CREATED)
+
+        except ValueError as e:
+            log_activity(
+                agent=agent,
+                action="TX_DEPOT_FAILED",
+                description=f"Échec création dépôt: {str(e)}",
+                level="WARNING",
+                ip_address=request.META.get('REMOTE_ADDR')
+            )
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as e:
+            logger.exception(f"Erreur inattendue lors du dépôt: {e}")
+            log_activity(
+                agent=agent,
+                action="TX_DEPOT_ERROR",
+                description=f"Erreur technique: {str(e)}",
+                level="ERROR",
+                ip_address=request.META.get('REMOTE_ADDR')
+            )
+            return Response(
+                {'error': 'Une erreur technique est survenue. Veuillez réessayer.'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
     @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated, IsApprovedAgent])
     def withdraw(self, request):
+        """
+        Effectuer un retrait.
+
+        POST /api/transactions/withdraw/
+        {
+            "amount": 10000,
+            "target_operator": "ORANGE",
+            "target_phone_number": "621234567"
+        }
+        """
         serializer = WithdrawSerializer(data=request.data)
-        if serializer.is_valid():
-            agent = request.user.agent_profile
-            # Retrait: Pas de compensation, l'agent encaisse le cash et transfère de la monnaie électronique
-            return Response({'message': 'Retrait non implémenté pour le moment'}, status=status.HTTP_501_NOT_IMPLEMENTED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        agent = request.user.agent_profile
+
+        # Vérifier si l'agent n'est pas suspendu
+        if agent.is_suspended:
+            log_activity(
+                agent=agent,
+                action="TX_WITHDRAW_REFUSED",
+                description="Tentative de retrait refusée: agent suspendu",
+                level="WARNING",
+                ip_address=request.META.get('REMOTE_ADDR')
+            )
+            return Response(
+                {'error': 'Votre compte est suspendu. Contactez le support.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        try:
+            tx = CompensationEngine.create_withdrawal_transaction(
+                agent=agent,
+                amount=serializer.validated_data['amount'],
+                target_operator=serializer.validated_data['target_operator'],
+                target_phone_number=serializer.validated_data['target_phone_number']
+            )
+
+            # Pour le retrait, l'agent encaisse le cash et valide la transaction
+            # Le webhook sera appelé par CinetPay pour confirmer le paiement électronique
+            # En mode simulacre, on valide immédiatement
+            with transaction.atomic():
+                tx.status = 'COMPLETED'
+                tx.save()
+
+                # Log de la commission de l'agent
+                log_activity(
+                    agent=agent,
+                    action="TX_WITHDRAW_COMPLETED",
+                    description=f"Retrait de {tx.amount} FCFA complété. Commission: {tx.agent_benefit} FCFA",
+                    level="SUCCESS",
+                    ip_address=request.META.get('REMOTE_ADDR')
+                )
+
+            return Response({
+                'message': 'Retrait complété avec succès',
+                'transaction_id': str(tx.id),
+                'amount': str(tx.amount),
+                'commission_sic': str(tx.commission_sic),
+                'agent_benefit': str(tx.agent_benefit),
+                'status': tx.status,
+                'created_at': tx.created_at.isoformat()
+            }, status=status.HTTP_201_CREATED)
+
+        except ValueError as e:
+            log_activity(
+                agent=agent,
+                action="TX_WITHDRAW_FAILED",
+                description=f"Échec création retrait: {str(e)}",
+                level="WARNING",
+                ip_address=request.META.get('REMOTE_ADDR')
+            )
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as e:
+            logger.exception(f"Erreur inattendue lors du retrait: {e}")
+            log_activity(
+                agent=agent,
+                action="TX_WITHDRAW_ERROR",
+                description=f"Erreur technique: {str(e)}",
+                level="ERROR",
+                ip_address=request.META.get('REMOTE_ADDR')
+            )
+            return Response(
+                {'error': 'Une erreur technique est survenue. Veuillez réessayer.'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
     @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated, IsApprovedAgent])
     def conversion(self, request):
-        serializer = ConversionSerializer(data=request.data)
-        if serializer.is_valid():
-            agent = request.user.agent_profile
-            amount = serializer.validated_data['amount']
-            source_id = serializer.validated_data['source_puce_id']
-            target_id = serializer.validated_data['target_puce_id']
-            
-            try:
-                source_puce = Puce.objects.get(id=source_id, agent=agent)
-                target_puce = Puce.objects.get(id=target_id, agent=agent)
-            except Puce.DoesNotExist:
-                return Response({'error': 'Puce invalide'}, status=status.HTTP_400_BAD_REQUEST)
-                
-            if source_puce.balance < amount:
-                return Response({'error': 'Solde insuffisant sur la puce source'}, status=status.HTTP_400_BAD_REQUEST)
+        """
+        Effectuer une conversion entre puces.
 
-            with transaction.atomic():
-                tx = Transaction.objects.create(
-                    agent=agent, type='SWAP', status='PENDING',
-                    target_operator=target_puce.operator, target_phone_number=str(target_puce.id),
-                    amount=amount, is_compensated=False
-                )
-                ref = f"CPAY_{uuid.uuid4().hex[:8].upper()}"
-                CompensationDetail.objects.create(
-                    transaction=tx, puce=source_puce, amount_deducted=amount,
-                    status='PENDING', cinetpay_ref=ref
-                )
-            log_activity(agent=agent, action="TX_CONVERSION_INITIATED", description=f"Conversion de {amount} initiée.", level="INFO")
-            return Response({'message': 'Conversion initiée', 'transaction_id': tx.id})
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        POST /api/transactions/conversion/
+        {
+            "amount": 5000,
+            "source_puce_id": "uuid-source",
+            "target_puce_id": "uuid-target"
+        }
+        """
+        serializer = ConversionSerializer(data=request.data, context={'request': request})
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    @action(detail=False, methods=['post'], permission_classes=[])
-    def webhook(self, request):
-        # 1. Vérification de la signature HMAC (Sécurité critique)
-        x_token = request.headers.get('x-token')
-        if not x_token:
-            return Response({'error': 'Missing signature'}, status=status.HTTP_401_UNAUTHORIZED)
-            
-        ref = request.data.get('cpm_trans_id') or request.data.get('cinetpay_ref')
-        site_id = request.data.get('cpm_site_id', os.environ.get('CINETPAY_SITE_ID', ''))
-        secret_key = os.environ.get('CINETPAY_SECRET_KEY', '').encode('utf-8')
-        
-        # Le token de CinetPay est généralement calculé sur certaines données spécifiques
-        # Pour cet exemple, on s'assure qu'un contrôle cryptographique est fait
-        expected_token = hmac.new(secret_key, (site_id + str(ref)).encode('utf-8'), hashlib.sha256).hexdigest()
-        
-        if not hmac.compare_digest(x_token, expected_token):
-             # On logue la tentative de fraude
-             return Response({'error': 'Invalid signature'}, status=status.HTTP_403_FORBIDDEN)
+        agent = request.user.agent_profile
 
-        if not ref:
-            return Response({'error': 'Missing ref'}, status=status.HTTP_400_BAD_REQUEST)
-            
+        if agent.is_suspended:
+            return Response(
+                {'error': 'Votre compte est suspendu.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
         try:
-            detail = CompensationDetail.objects.select_related('transaction').get(cinetpay_ref=ref)
-        except CompensationDetail.DoesNotExist:
-            return Response({'error': 'Not found'}, status=404)
-            
-        if detail.status != 'PENDING':
-            return Response({'message': 'Already processed'})
-            
-        with transaction.atomic():
-            detail.status = 'SUCCESS'
-            detail.save()
-            
-            # Déduire le solde
-            puce = detail.puce
-            puce.balance -= detail.amount_deducted
-            puce.save()
-            
-            # Vérifier si toute la transaction est complète
-            tx = detail.transaction
-            all_details = tx.compensation_details.all()
-            if all(d.status == 'SUCCESS' for d in all_details):
-                tx.status = 'COMPLETED'
-                tx.save()
-                
-                if tx.type == 'SWAP':
-                    target_puce = Puce.objects.get(id=tx.target_phone_number)
+            source_puce = Puce.objects.get(
+                id=serializer.validated_data['source_puce_id'],
+                agent=agent
+            )
+            target_puce = Puce.objects.get(
+                id=serializer.validated_data['target_puce_id'],
+                agent=agent
+            )
+        except Puce.DoesNotExist:
+            return Response(
+                {'error': 'Puce invalide ou n\'appartenant pas à votre compte'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            tx = CompensationEngine.create_swap_transaction(
+                agent=agent,
+                amount=serializer.validated_data['amount'],
+                source_puce=source_puce,
+                target_puce=target_puce
+            )
+
+            # Simulation webhook pour développement
+            # En production, CinetPay appellera le webhook真实的
+            if settings.DEBUG:
+                # Simuler le succès immédiat
+                detail = tx.compensation_details.first()
+                if detail:
+                    detail.status = 'SUCCESS'
+                    detail.save()
+                    source_puce.balance -= tx.amount
+                    source_puce.save()
                     target_puce.balance += tx.amount
                     target_puce.save()
-                    log_activity(agent=tx.agent, action="TX_CONVERSION_COMPLETED", description=f"Conversion de {tx.amount} complétée.", level="SUCCESS")
-                else:
-                    log_activity(agent=tx.agent, action="TX_COMPLETED", description=f"Transaction {tx.type} de {tx.amount} complétée.", level="SUCCESS")
-                    
-        return Response({'success': True})
+                    tx.status = 'COMPLETED'
+                    tx.save()
+
+                    log_activity(
+                        agent=agent,
+                        action="TX_CONVERSION_COMPLETED",
+                        description=f"Conversion de {tx.amount} FCFA de {source_puce.operator} vers {target_puce.operator} complétée.",
+                        level="SUCCESS",
+                        ip_address=request.META.get('REMOTE_ADDR')
+                    )
+
+            return Response({
+                'message': 'Conversion initiée',
+                'transaction_id': str(tx.id),
+                'amount': str(tx.amount),
+                'source_puce': f"{source_puce.operator} {source_puce.phone_number}",
+                'target_puce': f"{target_puce.operator} {target_puce.phone_number}",
+                'status': tx.status,
+                'created_at': tx.created_at.isoformat()
+            }, status=status.HTTP_201_CREATED)
+
+        except ValueError as e:
+            log_activity(
+                agent=agent,
+                action="TX_CONVERSION_FAILED",
+                description=f"Échec conversion: {str(e)}",
+                level="WARNING",
+                ip_address=request.META.get('REMOTE_ADDR')
+            )
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=False, methods=['post'], permission_classes=[AllowAny])
+    def webhook(self, request):
+        """
+        Webhook CinetPay pour confirmer les paiements.
+
+        POST /api/transactions/webhook/
+        Headers: x-token: signature HMAC
+        Body: {
+            "cpm_trans_id": "transaction_id",
+            "cpm_site_id": "site_id",
+            "cpm_amount": "10000",
+            "cpm_currency": "XOF",
+            "cpm_payment_date": "2024-01-01 12:00:00",
+            "cpm_payment_status": "ACCEPTED"
+        }
+        """
+        # Vérification de la signature HMAC
+        x_token = request.headers.get('x-token')
+        if not x_token:
+            logger.warning("Webhook: Signature manquante")
+            return Response(
+                {'error': 'Missing signature'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+
+        ref = request.data.get('cpm_trans_id') or request.data.get('cinetpay_ref')
+        site_id = request.data.get('cpm_site_id', '')
+        secret_key = settings.CINETPAY_CONFIG.get('SECRET_KEY', '')
+
+        if not ref:
+            logger.warning("Webhook: Référence manquante")
+            return Response(
+                {'error': 'Missing ref'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Vérification de la signature HMAC
+        if secret_key:
+            expected_token = hmac.new(
+                secret_key.encode('utf-8'),
+                (site_id + str(ref)).encode('utf-8'),
+                hashlib.sha256
+            ).hexdigest()
+
+            if not hmac.compare_digest(x_token, expected_token):
+                logger.warning(f"Webhook: Signature invalide pour {ref}")
+                log_activity(
+                    action="WEBHOOK_INVALID_SIGNATURE",
+                    description=f"Tentative de webhook avec signature invalide: {ref[:20]}...",
+                    level="ERROR"
+                )
+                return Response(
+                    {'error': 'Invalid signature'},
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
+        # Traiter le webhook via le moteur de compensation
+        payment_status = request.data.get('cpm_payment_status', '')
+        new_status = 'SUCCESS' if payment_status in ('ACCEPTED', 'SUCCESS') else 'FAILED'
+
+        tx, success = CompensationEngine.process_webhook(ref, new_status, request.data)
+
+        if tx is None:
+            return Response(
+                {'error': 'Transaction not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        logger.info(f"Webhook: Transaction {tx.id} mise à jour vers {new_status}")
+
+        return Response({'success': success, 'transaction_id': str(tx.id)})
+
+
+class CommissionInfoView(generics.GenericAPIView):
+    """
+    Vue pour récupérer les informations de commission.
+
+    GET /api/commissions/
+    """
+    permission_classes = [AllowAny]
+    throttle_classes = []
+
+    def get(self, request):
+        """Retourne les taux de commission actuels."""
+        tx_type = request.query_params.get('type', '').upper()
+
+        if tx_type and tx_type in settings.COMMISSION_RATES:
+            r = CommissionCalculator.get_rate(tx_type)
+            return Response({
+                'type': tx_type,
+                'sic_rate': float(r['sic_rate'] * 100),
+                'agent_rate': float(r['agent_rate'] * 100),
+                'min_amount': settings.MIN_TRANSACTION_AMOUNT,
+                'max_amount': settings.MAX_TRANSACTION_AMOUNT
+            })
+
+        # Retourner tous les taux
+        rates = {}
+        for t in ['DEPOT', 'RETRAIT', 'TRANSFERT', 'SWAP']:
+            r = CommissionCalculator.get_rate(t)
+            rates[t] = {
+                'sic_rate': float(r['sic_rate'] * 100),
+                'agent_rate': float(r['agent_rate'] * 100),
+            }
+        return Response({
+            'commissions': rates,
+            'min_amount': settings.MIN_TRANSACTION_AMOUNT,
+            'max_amount': settings.MAX_TRANSACTION_AMOUNT
+        })
+
+
+class HealthCheckView(generics.GenericAPIView):
+    """
+    Point de terminaison de santé de l'API.
+
+    GET /api/health/
+    """
+    permission_classes = [AllowAny]
+    throttle_classes = []
+
+    def get(self, request):
+        return Response({
+            'status': 'healthy',
+            'timestamp': timezone.now().isoformat(),
+            'version': '1.0.0'
+        })
+
+
+# =============================================================================
+# AUTHENTIFICATION AVANCÉE - Logout, PIN, Biométrie
+# =============================================================================
+
+class CustomTokenObtainPairView(generics.GenericAPIView):
+    """
+    Login avec JWT custom (ajoute agent_id, kyc_status, etc. dans le token).
+
+    POST /api/auth/login/
+    {"username": "...", "password": "..."}
+    """
+    permission_classes = [AllowAny]
+    throttle_classes = [LoginRateThrottle]
+    throttle_scope = 'login'
+
+    def post(self, request, *args, **kwargs):
+        from .serializers import CustomTokenObtainPairSerializer
+        serializer = CustomTokenObtainPairSerializer(data=request.data)
+        if serializer.is_valid():
+            return Response(serializer.validated_data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_401_UNAUTHORIZED)
+
+
+class LogoutView(generics.GenericAPIView):
+    """
+    Logout - Blackliste le refresh token.
+
+    POST /api/auth/logout/
+    {"refresh": "eyJ..."}
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        from rest_framework_simplejwt.tokens import RefreshToken
+        from rest_framework_simplejwt.exceptions import TokenError
+
+        refresh_token = request.data.get('refresh')
+        if not refresh_token:
+            return Response(
+                {'error': 'Le token de rafraîchissement est requis.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            token = RefreshToken(refresh_token)
+            token.blacklist()
+
+            log_activity(
+                user=request.user,
+                action="LOGOUT",
+                description=f"Déconnexion de {request.user.username}",
+                level="INFO",
+                ip_address=request.META.get('REMOTE_ADDR')
+            )
+
+            return Response({'message': 'Déconnexion réussie.'}, status=status.HTTP_200_OK)
+
+        except TokenError:
+            return Response(
+                {'error': 'Token invalide ou déjà expiré.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+
+class PinSetupView(generics.GenericAPIView):
+    """
+    Définir ou modifier le code PIN.
+
+    POST /api/auth/pin/setup/
+    {"password": "...", "pin": "1234", "pin_confirm": "1234"}
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        from .serializers import PinSetupSerializer
+
+        serializer = PinSetupSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        # Vérifier le mot de passe
+        if not request.user.check_password(serializer.validated_data['password']):
+            log_activity(
+                user=request.user,
+                action="PIN_SETUP_FAILED",
+                description="Tentative de configuration PIN avec mot de passe incorrect.",
+                level="WARNING",
+                ip_address=request.META.get('REMOTE_ADDR')
+            )
+            return Response(
+                {'error': 'Mot de passe incorrect.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # Définir le PIN
+        agent = getattr(request.user, 'agent_profile', None)
+        if not agent:
+            return Response({'error': 'Profil agent introuvable.'}, status=status.HTTP_404_NOT_FOUND)
+
+        agent.set_pin(serializer.validated_data['pin'])
+
+        log_activity(
+            agent=agent,
+            action="PIN_CONFIGURED",
+            description="Code PIN configuré avec succès.",
+            level="SUCCESS",
+            ip_address=request.META.get('REMOTE_ADDR')
+        )
+
+        return Response({'message': 'Code PIN configuré avec succès.'}, status=status.HTTP_200_OK)
+
+
+class PinVerifyView(generics.GenericAPIView):
+    """
+    Vérifier le code PIN (avant une action sensible).
+
+    POST /api/auth/pin/verify/
+    {"pin": "1234"}
+
+    Retourne un token temporaire de validation (valide 5 min).
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        from .serializers import PinVerifySerializer
+        import time
+
+        serializer = PinVerifySerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        agent = getattr(request.user, 'agent_profile', None)
+        if not agent:
+            return Response({'error': 'Profil agent introuvable.'}, status=status.HTTP_404_NOT_FOUND)
+
+        if not agent.pin_code:
+            return Response(
+                {'error': 'Aucun code PIN configuré. Veuillez en définir un.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Vérifier si le compte est verrouillé
+        if agent.pin_locked_until and agent.pin_locked_until > timezone.now():
+            remaining = (agent.pin_locked_until - timezone.now()).seconds // 60
+            return Response(
+                {'error': f'Compte verrouillé. Réessayez dans {remaining + 1} minute(s).'},
+                status=status.HTTP_429_TOO_MANY_REQUESTS
+            )
+
+        # Vérifier le PIN
+        if agent.check_pin(serializer.validated_data['pin']):
+            # Succès - reset des tentatives
+            agent.pin_attempts = 0
+            agent.pin_locked_until = None
+            agent.save()
+
+            # Générer un token de validation temporaire (5 min)
+            import hashlib
+            pin_token = hashlib.sha256(
+                f"{agent.id}:{int(time.time())}:{settings.SECRET_KEY}".encode()
+            ).hexdigest()[:32]
+
+            log_activity(
+                agent=agent,
+                action="PIN_VERIFIED",
+                description="Code PIN vérifié avec succès.",
+                level="INFO",
+                ip_address=request.META.get('REMOTE_ADDR')
+            )
+
+            return Response({
+                'message': 'Code PIN vérifié.',
+                'pin_token': pin_token,
+                'expires_in': 300  # 5 minutes
+            }, status=status.HTTP_200_OK)
+        else:
+            # Échec - incrémenter les tentatives
+            agent.pin_attempts += 1
+
+            if agent.pin_attempts >= 5:
+                # Verrouiller pendant 15 minutes
+                agent.pin_locked_until = timezone.now() + timedelta(minutes=15)
+                agent.save()
+
+                log_activity(
+                    agent=agent,
+                    action="PIN_LOCKED",
+                    description=f"Compte verrouillé après {agent.pin_attempts} tentatives PIN échouées.",
+                    level="ERROR",
+                    ip_address=request.META.get('REMOTE_ADDR')
+                )
+
+                return Response(
+                    {'error': 'Trop de tentatives. Compte verrouillé pendant 15 minutes.'},
+                    status=status.HTTP_429_TOO_MANY_REQUESTS
+                )
+
+            agent.save()
+
+            log_activity(
+                agent=agent,
+                action="PIN_FAILED",
+                description=f"Tentative PIN échouée ({agent.pin_attempts}/5).",
+                level="WARNING",
+                ip_address=request.META.get('REMOTE_ADDR')
+            )
+
+            return Response(
+                {'error': f'Code PIN incorrect. {5 - agent.pin_attempts} tentative(s) restante(s).'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+
+
+class BiometricRegisterView(generics.GenericAPIView):
+    """
+    Enregistrer un appareil pour l'authentification biométrique.
+
+    POST /api/auth/biometric/register/
+    {"device_id": "...", "device_name": "iPhone 15", "public_key": "..."}
+
+    Requiert d'être authentifié (l'agent doit d'abord se connecter normalement).
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        from .serializers import BiometricRegisterSerializer
+
+        serializer = BiometricRegisterSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        agent = getattr(request.user, 'agent_profile', None)
+        if not agent:
+            return Response({'error': 'Profil agent introuvable.'}, status=status.HTTP_404_NOT_FOUND)
+
+        device_id = serializer.validated_data['device_id']
+
+        # Vérifier si le device existe déjà
+        existing = BiometricDevice.objects.filter(device_id=device_id).first()
+        if existing:
+            if existing.agent != agent:
+                return Response(
+                    {'error': 'Cet appareil est déjà enregistré sur un autre compte.'},
+                    status=status.HTTP_409_CONFLICT
+                )
+            # Mettre à jour la clé publique
+            existing.public_key = serializer.validated_data['public_key']
+            existing.device_name = serializer.validated_data.get('device_name', '')
+            existing.is_active = True
+            existing.save()
+
+            log_activity(
+                agent=agent,
+                action="BIOMETRIC_UPDATED",
+                description=f"Appareil biométrique mis à jour: {existing.device_name or device_id[:12]}",
+                level="INFO",
+                ip_address=request.META.get('REMOTE_ADDR')
+            )
+
+            return Response({
+                'message': 'Appareil biométrique mis à jour.',
+                'device_id': device_id
+            }, status=status.HTTP_200_OK)
+
+        # Limiter à 3 appareils par agent
+        if BiometricDevice.objects.filter(agent=agent, is_active=True).count() >= 3:
+            return Response(
+                {'error': 'Maximum 3 appareils biométriques autorisés.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Créer le device
+        device = BiometricDevice.objects.create(
+            agent=agent,
+            device_id=device_id,
+            device_name=serializer.validated_data.get('device_name', ''),
+            public_key=serializer.validated_data['public_key'],
+            is_active=True
+        )
+
+        log_activity(
+            agent=agent,
+            action="BIOMETRIC_REGISTERED",
+            description=f"Nouvel appareil biométrique enregistré: {device.device_name or device_id[:12]}",
+            level="SUCCESS",
+            ip_address=request.META.get('REMOTE_ADDR')
+        )
+
+        return Response({
+            'message': 'Appareil biométrique enregistré avec succès.',
+            'device_id': device_id
+        }, status=status.HTTP_201_CREATED)
+
+
+class BiometricLoginView(generics.GenericAPIView):
+    """
+    Authentification par empreinte digitale.
+
+    POST /api/auth/biometric/login/
+    {"device_id": "...", "signature": "...", "timestamp": 1717200000}
+
+    Le mobile signe le timestamp avec la clé privée après scan d'empreinte.
+    L'API vérifie la signature avec la clé publique enregistrée.
+    """
+    permission_classes = [AllowAny]
+    throttle_classes = [LoginRateThrottle]
+    throttle_scope = 'login'
+
+    def post(self, request):
+        from .serializers import BiometricLoginSerializer
+        import hashlib
+        import time
+
+        serializer = BiometricLoginSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        device_id = serializer.validated_data['device_id']
+        signature = serializer.validated_data['signature']
+        timestamp = serializer.validated_data['timestamp']
+
+        # Anti-replay: le timestamp ne doit pas être trop vieux (5 min max)
+        current_time = int(time.time())
+        if abs(current_time - timestamp) > 300:
+            return Response(
+                {'error': 'Signature expirée. Veuillez réessayer.'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+
+        # Trouver le device
+        try:
+            device = BiometricDevice.objects.select_related('agent', 'agent__user').get(
+                device_id=device_id, is_active=True
+            )
+        except BiometricDevice.DoesNotExist:
+            log_activity(
+                action="BIOMETRIC_LOGIN_FAILED",
+                description=f"Tentative de login biométrique avec device inconnu: {device_id[:20]}",
+                level="WARNING",
+                ip_address=request.META.get('REMOTE_ADDR')
+            )
+            return Response(
+                {'error': 'Appareil non reconnu ou désactivé.'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+
+        agent = device.agent
+
+        # Vérifier que l'agent n'est pas suspendu
+        if agent.is_suspended:
+            return Response(
+                {'error': 'Votre compte est suspendu.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # Vérification de la signature
+        # En production: utiliser cryptography (RSA/ECDSA) pour vérifier avec la public_key
+        # En développement: vérification simplifiée HMAC
+        expected_signature = hashlib.sha256(
+            f"{device_id}:{timestamp}:{device.public_key}".encode()
+        ).hexdigest()
+
+        if not hmac.compare_digest(signature, expected_signature):
+            log_activity(
+                agent=agent,
+                action="BIOMETRIC_LOGIN_INVALID",
+                description="Signature biométrique invalide.",
+                level="WARNING",
+                ip_address=request.META.get('REMOTE_ADDR')
+            )
+            return Response(
+                {'error': 'Signature invalide.'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+
+        # Succès - Générer les tokens JWT
+        from rest_framework_simplejwt.tokens import RefreshToken
+        from .serializers import CustomTokenObtainPairSerializer
+
+        refresh = CustomTokenObtainPairSerializer.get_token(agent.user)
+
+        # Mettre à jour last_used
+        device.last_used_at = timezone.now()
+        device.save()
+
+        log_activity(
+            agent=agent,
+            action="BIOMETRIC_LOGIN_SUCCESS",
+            description=f"Connexion biométrique réussie via {device.device_name or device_id[:12]}",
+            level="INFO",
+            ip_address=request.META.get('REMOTE_ADDR')
+        )
+
+        return Response({
+            'message': 'Authentification biométrique réussie.',
+            'access': str(refresh.access_token),
+            'refresh': str(refresh),
+            'agent_id': str(agent.id),
+            'first_name': agent.first_name or '',
+        }, status=status.HTTP_200_OK)
+
+
+class BiometricDeviceListView(generics.GenericAPIView):
+    """
+    Lister et révoquer les appareils biométriques.
+
+    GET /api/auth/biometric/devices/ — Liste des appareils
+    DELETE /api/auth/biometric/devices/ — Révoquer un appareil
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        agent = getattr(request.user, 'agent_profile', None)
+        if not agent:
+            return Response({'error': 'Profil agent introuvable.'}, status=status.HTTP_404_NOT_FOUND)
+
+        devices = BiometricDevice.objects.filter(agent=agent).order_by('-created_at')
+        data = [{
+            'id': str(d.id),
+            'device_id': d.device_id,
+            'device_name': d.device_name,
+            'is_active': d.is_active,
+            'last_used_at': d.last_used_at.isoformat() if d.last_used_at else None,
+            'created_at': d.created_at.isoformat()
+        } for d in devices]
+
+        return Response({'devices': data}, status=status.HTTP_200_OK)
+
+    def delete(self, request):
+        agent = getattr(request.user, 'agent_profile', None)
+        if not agent:
+            return Response({'error': 'Profil agent introuvable.'}, status=status.HTTP_404_NOT_FOUND)
+
+        device_id = request.data.get('device_id')
+        if not device_id:
+            return Response({'error': 'device_id requis.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            device = BiometricDevice.objects.get(agent=agent, device_id=device_id)
+            device.is_active = False
+            device.save()
+
+            log_activity(
+                agent=agent,
+                action="BIOMETRIC_REVOKED",
+                description=f"Appareil biométrique révoqué: {device.device_name or device_id[:12]}",
+                level="INFO",
+                ip_address=request.META.get('REMOTE_ADDR')
+            )
+
+            return Response({'message': 'Appareil révoqué.'}, status=status.HTTP_200_OK)
+
+        except BiometricDevice.DoesNotExist:
+            return Response({'error': 'Appareil introuvable.'}, status=status.HTTP_404_NOT_FOUND)

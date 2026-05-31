@@ -1,38 +1,24 @@
 <!DOCTYPE html>
-<html lang="fr" class="antialiased">
+<html lang="fr" class="antialiased" x-data="{ darkMode: localStorage.getItem('darkMode') === 'true' }" :class="{ 'dark': darkMode }">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SIC | Admin</title>
-    
-    <!-- Google Fonts: Outfit for a modern FinTech look -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    
-    <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- Tailwind Custom Configuration -->
     <script>
         tailwind.config = {
+            darkMode: 'class',
             theme: {
                 extend: {
-                    fontFamily: {
-                        sans: ['Outfit', 'sans-serif'],
-                    },
+                    fontFamily: { sans: ['Outfit', 'sans-serif'] },
                     colors: {
                         brand: {
-                            50: '#f0f5ff',
-                            100: '#e5edff',
-                            200: '#cddbfe',
-                            300: '#b4c6fc',
-                            400: '#8da2fb',
-                            500: '#6875f5', // Indigo-like primary
-                            600: '#5850ec',
-                            700: '#5145cd',
-                            800: '#42389d',
-                            900: '#362f78',
+                            50: '#f0f5ff', 100: '#e5edff', 200: '#cddbfe', 300: '#b4c6fc',
+                            400: '#8da2fb', 500: '#6875f5', 600: '#5850ec', 700: '#5145cd',
+                            800: '#42389d', 900: '#362f78',
                         }
                     },
                     animation: {
@@ -42,62 +28,36 @@
                         'spin-slow-reverse': 'spin 12s linear infinite reverse',
                     },
                     keyframes: {
-                        fadeInUp: {
-                            '0%': { opacity: '0', transform: 'translateY(10px)' },
-                            '100%': { opacity: '1', transform: 'translateY(0)' },
-                        },
-                        slideInRight: {
-                            '0%': { opacity: '0', transform: 'translateX(20px)' },
-                            '100%': { opacity: '1', transform: 'translateX(0)' },
-                        }
+                        fadeInUp: { '0%': { opacity: '0', transform: 'translateY(10px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } },
+                        slideInRight: { '0%': { opacity: '0', transform: 'translateX(20px)' }, '100%': { opacity: '1', transform: 'translateX(0)' } }
                     }
                 }
             }
         }
     </script>
-    
-    <!-- Alpine.js for UI interactivity (Dropdowns) -->
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-    
-    <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
-    
     <style>
-        /* Custom scrollbar for webkit */
-        ::-webkit-scrollbar {
-            width: 6px;
-            height: 6px;
-        }
-        ::-webkit-scrollbar-track {
-            background: transparent;
-        }
-        ::-webkit-scrollbar-thumb {
-            background: #cbd5e1;
-            border-radius: 10px;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-            background: #94a3b8;
-        }
-        
-        /* Hide element class for animations */
-        .toast-hidden {
-            opacity: 0;
-            transform: translateX(100%);
-            transition: all 0.3s ease-in-out;
-        }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        .dark ::-webkit-scrollbar-thumb { background: #475569; }
+        .dark ::-webkit-scrollbar-thumb:hover { background: #64748b; }
+        .toast-hidden { opacity: 0; transform: translateX(100%); transition: all 0.3s ease-in-out; }
     </style>
 </head>
-<body class="bg-[#F8FAFC] text-slate-800 flex h-screen overflow-hidden selection:bg-brand-500 selection:text-white">
+<body class="bg-[#F8FAFC] dark:bg-slate-900 text-slate-800 dark:text-slate-200 flex h-screen overflow-hidden selection:bg-brand-500 selection:text-white transition-colors duration-300">
 
     <!-- Notifications Toast Area -->
     <div id="toast-container" class="fixed top-6 right-6 z-50 flex flex-col gap-3">
         {% if messages %}
             {% for message in messages %}
-                <div class="toast-message animate-slide-in-right flex items-center p-4 bg-white border-l-4 rounded-xl shadow-lg border-{% if message.tags == 'success' %}green-500{% elif message.tags == 'warning' %}orange-500{% elif message.tags == 'error' %}red-500{% else %}brand-500{% endif %} min-w-[300px]">
+                <div class="toast-message animate-slide-in-right flex items-center p-4 bg-white dark:bg-slate-800 border-l-4 rounded-xl shadow-lg border-{% if message.tags == 'success' %}green-500{% elif message.tags == 'warning' %}orange-500{% elif message.tags == 'error' %}red-500{% else %}brand-500{% endif %} min-w-[300px]">
                     <div class="flex-1 ml-3">
-                        <p class="text-sm font-medium text-slate-800">{{ message }}</p>
+                        <p class="text-sm font-medium text-slate-800 dark:text-slate-200">{{ message }}</p>
                     </div>
-                    <button onclick="this.parentElement.remove()" class="text-slate-400 hover:text-slate-600 transition-colors">
+                    <button onclick="this.parentElement.remove()" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">
                         <i data-lucide="x" class="w-4 h-4"></i>
                     </button>
                 </div>
@@ -106,25 +66,20 @@
     </div>
 
     <!-- Sidebar -->
-    <aside class="w-72 h-full bg-white border-r border-slate-200/60 flex flex-col shadow-[4px_0_24px_rgba(0,0,0,0.02)] flex-shrink-0 z-20">
+    <aside class="w-72 h-full bg-white dark:bg-slate-800 border-r border-slate-200/60 dark:border-slate-700/60 flex flex-col shadow-[4px_0_24px_rgba(0,0,0,0.02)] dark:shadow-none flex-shrink-0 z-20 transition-colors duration-300">
         <!-- Logo Area -->
-        <div class="h-24 flex items-center justify-center border-b border-slate-100/80">
+        <div class="h-24 flex items-center justify-center border-b border-slate-100/80 dark:border-slate-700/80">
             <div class="relative w-16 h-16 flex items-center justify-center group flex-shrink-0">
-                <!-- Globe Base -->
                 <div class="absolute inset-1 bg-gradient-to-br from-blue-500 to-blue-700 rounded-full shadow-lg shadow-blue-500/40"></div>
-                <!-- Grid/Meridians -->
                 <svg class="absolute inset-1 w-14 h-14 text-white/20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
                     <circle cx="12" cy="12" r="10"></circle>
                     <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
                     <path d="M2 12h20"></path>
                 </svg>
-                <!-- Text Inside -->
                 <span class="absolute z-10 font-black text-white text-xl tracking-widest drop-shadow-md">SIC</span>
-                <!-- Orbit Ring 1 (Animated) -->
                 <div class="absolute inset-0 rounded-full border-2 border-cyan-400/60 transform rotate-[15deg] animate-spin-slow pointer-events-none">
                     <div class="absolute top-0 left-1/2 -ml-1 -mt-1 w-2.5 h-2.5 bg-emerald-400 rounded-full shadow-[0_0_8px_rgba(52,211,153,0.8)]"></div>
                 </div>
-                <!-- Orbit Ring 2 (Animated reverse) -->
                 <div class="absolute inset-0 rounded-full border-2 border-cyan-300/40 transform rotate-[75deg] scale-110 animate-spin-slow-reverse pointer-events-none">
                     <div class="absolute bottom-0 right-1/2 -mr-1 -mb-1 w-2.5 h-2.5 bg-emerald-300 rounded-full shadow-[0_0_8px_rgba(110,231,183,0.8)]"></div>
                 </div>
@@ -133,84 +88,83 @@
 
         <!-- Navigation -->
         <nav class="flex-1 px-4 py-6 space-y-1.5 overflow-y-auto">
-            <p class="px-4 text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Principal</p>
-            
-            <a href="{% url 'dashboard:dashboard_home' %}" class="group flex items-center justify-between px-4 py-3 rounded-2xl {% if request.resolver_match.url_name == 'dashboard_home' %}bg-brand-50 text-brand-700 font-semibold{% else %}text-slate-500 hover:bg-slate-50 hover:text-slate-900 font-medium{% endif %} transition-all duration-200">
+            <p class="px-4 text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-3">Principal</p>
+
+            <a href="{% url 'dashboard:dashboard_home' %}" class="group flex items-center justify-between px-4 py-3 rounded-2xl {% if request.resolver_match.url_name == 'dashboard_home' %}bg-brand-50 dark:bg-brand-900/30 text-brand-700 dark:text-brand-300 font-semibold{% else %}text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50 hover:text-slate-900 dark:hover:text-slate-100 font-medium{% endif %} transition-all duration-200">
                 <div class="flex items-center gap-3">
-                    <i data-lucide="layout-dashboard" class="w-5 h-5 {% if request.resolver_match.url_name == 'dashboard_home' %}text-brand-600{% else %}text-slate-400 group-hover:text-brand-500{% endif %} transition-colors"></i>
+                    <i data-lucide="layout-dashboard" class="w-5 h-5 {% if request.resolver_match.url_name == 'dashboard_home' %}text-brand-600 dark:text-brand-400{% else %}text-slate-400 dark:text-slate-500 group-hover:text-brand-500{% endif %} transition-colors"></i>
                     <span class="text-sm">Tableau de Bord</span>
                 </div>
             </a>
-            
-            <a href="{% url 'dashboard:agents' %}" class="group flex items-center justify-between px-4 py-3 rounded-2xl {% if request.resolver_match.url_name == 'agents' %}bg-brand-50 text-brand-700 font-semibold{% else %}text-slate-500 hover:bg-slate-50 hover:text-slate-900 font-medium{% endif %} transition-all duration-200">
+<!-- NAV_CONTINUE -->
+            <a href="{% url 'dashboard:agents' %}" class="group flex items-center justify-between px-4 py-3 rounded-2xl {% if request.resolver_match.url_name == 'agents' %}bg-brand-50 dark:bg-brand-900/30 text-brand-700 dark:text-brand-300 font-semibold{% else %}text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50 hover:text-slate-900 dark:hover:text-slate-100 font-medium{% endif %} transition-all duration-200">
                 <div class="flex items-center gap-3">
-                    <i data-lucide="users" class="w-5 h-5 {% if request.resolver_match.url_name == 'agents' %}text-brand-600{% else %}text-slate-400 group-hover:text-brand-500{% endif %} transition-colors"></i>
+                    <i data-lucide="users" class="w-5 h-5 {% if request.resolver_match.url_name == 'agents' %}text-brand-600 dark:text-brand-400{% else %}text-slate-400 dark:text-slate-500 group-hover:text-brand-500{% endif %} transition-colors"></i>
                     <span class="text-sm">Agents & KYC</span>
                 </div>
                 {% if pending_kyc_count > 0 %}
-                <span class="bg-orange-100 text-orange-600 text-xs font-bold px-2 py-0.5 rounded-full">{{ pending_kyc_count }}</span>
+                <span class="bg-orange-100 dark:bg-orange-900/40 text-orange-600 dark:text-orange-400 text-xs font-bold px-2 py-0.5 rounded-full">{{ pending_kyc_count }}</span>
                 {% endif %}
             </a>
-            
-            <a href="{% url 'dashboard:report_list' %}" class="group flex items-center justify-between px-4 py-3 rounded-2xl {% if 'report' in request.resolver_match.url_name %}bg-brand-50 text-brand-700 font-semibold{% else %}text-slate-500 hover:bg-slate-50 hover:text-slate-900 font-medium{% endif %} transition-all duration-200">
+
+            <a href="{% url 'dashboard:report_list' %}" class="group flex items-center justify-between px-4 py-3 rounded-2xl {% if 'report' in request.resolver_match.url_name %}bg-brand-50 dark:bg-brand-900/30 text-brand-700 dark:text-brand-300 font-semibold{% else %}text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50 hover:text-slate-900 dark:hover:text-slate-100 font-medium{% endif %} transition-all duration-200">
                 <div class="flex items-center gap-3">
-                    <i data-lucide="file-bar-chart" class="w-5 h-5 {% if 'report' in request.resolver_match.url_name %}text-brand-600{% else %}text-slate-400 group-hover:text-brand-500{% endif %} transition-colors"></i>
+                    <i data-lucide="file-bar-chart" class="w-5 h-5 {% if 'report' in request.resolver_match.url_name %}text-brand-600 dark:text-brand-400{% else %}text-slate-400 dark:text-slate-500 group-hover:text-brand-500{% endif %} transition-colors"></i>
                     <span class="text-sm">Rapports</span>
                 </div>
             </a>
-            
-            <p class="px-4 text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3 mt-8">Finance & Opérations</p>
-            
-            <a href="{% url 'dashboard:dashboard_transactions' %}" class="group flex items-center justify-between px-4 py-3 rounded-2xl {% if request.resolver_match.url_name == 'dashboard_transactions' %}bg-slate-100 text-slate-900 font-semibold{% else %}text-slate-500 hover:bg-slate-50 hover:text-slate-900 font-medium{% endif %} transition-all duration-200">
+
+            <p class="px-4 text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-3 mt-8">Finance & Opérations</p>
+
+            <a href="{% url 'dashboard:dashboard_transactions' %}" class="group flex items-center justify-between px-4 py-3 rounded-2xl {% if request.resolver_match.url_name == 'dashboard_transactions' %}bg-slate-100 dark:bg-slate-700/50 text-slate-900 dark:text-slate-100 font-semibold{% else %}text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50 hover:text-slate-900 dark:hover:text-slate-100 font-medium{% endif %} transition-all duration-200">
                 <div class="flex items-center gap-3">
-                    <i data-lucide="list" class="w-5 h-5 {% if request.resolver_match.url_name == 'dashboard_transactions' %}text-brand-600{% else %}text-slate-400 group-hover:text-brand-500{% endif %}"></i>
+                    <i data-lucide="list" class="w-5 h-5 {% if request.resolver_match.url_name == 'dashboard_transactions' %}text-brand-600 dark:text-brand-400{% else %}text-slate-400 dark:text-slate-500 group-hover:text-brand-500{% endif %}"></i>
                     <span class="text-sm">Toutes les opérations</span>
                 </div>
             </a>
 
-            <a href="{% url 'dashboard:transactions_type' 'depots' %}" class="group flex items-center justify-between px-4 py-3 rounded-2xl {% if 'depots' in request.path %}bg-blue-50 text-blue-700 font-semibold{% else %}text-slate-500 hover:bg-slate-50 hover:text-slate-900 font-medium{% endif %} transition-all duration-200">
+            <a href="{% url 'dashboard:transactions_type' 'depots' %}" class="group flex items-center justify-between px-4 py-3 rounded-2xl {% if 'depots' in request.path %}bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-semibold{% else %}text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50 hover:text-slate-900 dark:hover:text-slate-100 font-medium{% endif %} transition-all duration-200">
                 <div class="flex items-center gap-3">
-                    <i data-lucide="arrow-down-to-line" class="w-5 h-5 {% if 'depots' in request.path %}text-blue-600{% else %}text-slate-400 group-hover:text-blue-500{% endif %}"></i>
+                    <i data-lucide="arrow-down-to-line" class="w-5 h-5 {% if 'depots' in request.path %}text-blue-600 dark:text-blue-400{% else %}text-slate-400 dark:text-slate-500 group-hover:text-blue-500{% endif %}"></i>
                     <span class="text-sm">Dépôts</span>
                 </div>
             </a>
 
-            <a href="{% url 'dashboard:transactions_type' 'retraits' %}" class="group flex items-center justify-between px-4 py-3 rounded-2xl {% if 'retraits' in request.path %}bg-orange-50 text-orange-700 font-semibold{% else %}text-slate-500 hover:bg-slate-50 hover:text-slate-900 font-medium{% endif %} transition-all duration-200">
+            <a href="{% url 'dashboard:transactions_type' 'retraits' %}" class="group flex items-center justify-between px-4 py-3 rounded-2xl {% if 'retraits' in request.path %}bg-orange-50 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 font-semibold{% else %}text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50 hover:text-slate-900 dark:hover:text-slate-100 font-medium{% endif %} transition-all duration-200">
                 <div class="flex items-center gap-3">
-                    <i data-lucide="arrow-up-from-line" class="w-5 h-5 {% if 'retraits' in request.path %}text-orange-600{% else %}text-slate-400 group-hover:text-orange-500{% endif %}"></i>
+                    <i data-lucide="arrow-up-from-line" class="w-5 h-5 {% if 'retraits' in request.path %}text-orange-600 dark:text-orange-400{% else %}text-slate-400 dark:text-slate-500 group-hover:text-orange-500{% endif %}"></i>
                     <span class="text-sm">Retraits</span>
                 </div>
             </a>
 
-            <a href="{% url 'dashboard:transactions_type' 'conversions' %}" class="group flex items-center justify-between px-4 py-3 rounded-2xl {% if 'conversions' in request.path %}bg-emerald-50 text-emerald-700 font-semibold{% else %}text-slate-500 hover:bg-slate-50 hover:text-slate-900 font-medium{% endif %} transition-all duration-200">
+            <a href="{% url 'dashboard:transactions_type' 'conversions' %}" class="group flex items-center justify-between px-4 py-3 rounded-2xl {% if 'conversions' in request.path %}bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 font-semibold{% else %}text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50 hover:text-slate-900 dark:hover:text-slate-100 font-medium{% endif %} transition-all duration-200">
                 <div class="flex items-center gap-3">
-                    <i data-lucide="repeat" class="w-5 h-5 {% if 'conversions' in request.path %}text-emerald-600{% else %}text-slate-400 group-hover:text-emerald-500{% endif %}"></i>
+                    <i data-lucide="repeat" class="w-5 h-5 {% if 'conversions' in request.path %}text-emerald-600 dark:text-emerald-400{% else %}text-slate-400 dark:text-slate-500 group-hover:text-emerald-500{% endif %}"></i>
                     <span class="text-sm">Conversions</span>
                 </div>
             </a>
-            
-            <p class="px-4 text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3 mt-8">Système & Audit</p>
-            
-            <a href="{% url 'dashboard:activity_logs' %}" class="group flex items-center justify-between px-4 py-3 rounded-2xl {% if 'audit' in request.resolver_match.url_name %}bg-brand-50 text-brand-700 font-semibold{% else %}text-slate-500 hover:bg-slate-50 hover:text-slate-900 font-medium{% endif %} transition-all duration-200">
+
+            <p class="px-4 text-xs font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-wider mb-3 mt-8">Système & Audit</p>
+
+            <a href="{% url 'dashboard:activity_logs' %}" class="group flex items-center justify-between px-4 py-3 rounded-2xl {% if 'audit' in request.resolver_match.url_name %}bg-brand-50 dark:bg-brand-900/30 text-brand-700 dark:text-brand-300 font-semibold{% else %}text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700/50 hover:text-slate-900 dark:hover:text-slate-100 font-medium{% endif %} transition-all duration-200">
                 <div class="flex items-center gap-3">
-                    <i data-lucide="shield-alert" class="w-5 h-5 {% if 'audit' in request.resolver_match.url_name %}text-brand-600{% else %}text-slate-400 group-hover:text-brand-500{% endif %} transition-colors"></i>
+                    <i data-lucide="shield-alert" class="w-5 h-5 {% if 'audit' in request.resolver_match.url_name %}text-brand-600 dark:text-brand-400{% else %}text-slate-400 dark:text-slate-500 group-hover:text-brand-500{% endif %} transition-colors"></i>
                     <span class="text-sm">Journal d'Activité</span>
                 </div>
             </a>
-            
         </nav>
-
+<!-- USER_AREA_PLACEHOLDER -->
         <!-- User Area -->
-        <div class="p-4 border-t border-slate-100/80 bg-slate-50/50">
+        <div class="p-4 border-t border-slate-100/80 dark:border-slate-700/80 bg-slate-50/50 dark:bg-slate-800/50">
             <div class="flex items-center gap-3 px-2 py-2">
-                <div class="w-10 h-10 rounded-full bg-gradient-to-tr from-slate-800 to-slate-700 flex items-center justify-center text-sm font-bold text-white shadow-md ring-2 ring-white">
+                <div class="w-10 h-10 rounded-full bg-gradient-to-tr from-slate-800 to-slate-700 dark:from-brand-600 dark:to-brand-500 flex items-center justify-center text-sm font-bold text-white shadow-md ring-2 ring-white dark:ring-slate-700">
                     {{ request.user.username|make_list|first|upper }}
                 </div>
                 <div class="flex flex-col flex-1 overflow-hidden">
-                    <span class="text-sm font-bold text-slate-900 truncate">{{ request.user.username }}</span>
-                    <span class="text-xs text-slate-500 truncate">Super Administrateur</span>
+                    <span class="text-sm font-bold text-slate-900 dark:text-slate-100 truncate">{{ request.user.username }}</span>
+                    <span class="text-xs text-slate-500 dark:text-slate-400 truncate">Super Administrateur</span>
                 </div>
-                <a href="{% url 'dashboard:logout' %}" title="Déconnexion" class="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors block">
+                <a href="{% url 'dashboard:logout' %}" title="Déconnexion" class="p-2 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-900/30 rounded-xl transition-colors block">
                     <i data-lucide="log-out" class="w-4 h-4"></i>
                 </a>
             </div>
@@ -218,43 +172,48 @@
     </aside>
 
     <!-- Main Content Area -->
-    <div class="flex-1 flex flex-col h-full overflow-hidden bg-[#F8FAFC]">
-        
-        <!-- Topbar Glassmorphism -->
-        <header class="h-20 flex items-center justify-between px-8 bg-[#F8FAFC]/80 backdrop-blur-xl border-b border-slate-200/50 sticky top-0 z-10">
-            
+    <div class="flex-1 flex flex-col h-full overflow-hidden bg-[#F8FAFC] dark:bg-slate-900 transition-colors duration-300">
+
+        <!-- Topbar -->
+        <header class="h-20 flex items-center justify-between px-8 bg-[#F8FAFC]/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-slate-200/50 dark:border-slate-700/50 sticky top-0 z-10 transition-colors duration-300">
+
             <div class="flex items-center gap-4 w-96">
-                <!-- Search Bar -->
                 <div class="relative w-full group">
                     <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                         <i data-lucide="search" class="w-4 h-4 text-slate-400 group-focus-within:text-brand-500 transition-colors"></i>
                     </div>
-                    <input type="text" placeholder="Rechercher (ID, Agent, Tél)..." 
-                           class="w-full bg-white border border-slate-200/80 rounded-2xl pl-11 pr-4 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 shadow-sm transition-all" />
+                    <input type="text" placeholder="Rechercher (ID, Agent, Tél)..."
+                           class="w-full bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 rounded-2xl pl-11 pr-4 py-2.5 text-sm text-slate-800 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 shadow-sm transition-all" />
                 </div>
             </div>
 
             <div class="flex items-center gap-4">
-                
+
+                <!-- Dark Mode Toggle -->
+                <button @click="darkMode = !darkMode; localStorage.setItem('darkMode', darkMode)" class="relative p-2.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 rounded-xl shadow-sm hover:shadow transition-all focus:outline-none">
+                    <i data-lucide="sun" class="w-4 h-4" x-show="darkMode" style="display: none;"></i>
+                    <i data-lucide="moon" class="w-4 h-4" x-show="!darkMode"></i>
+                </button>
+
                 <!-- Notification Dropdown -->
                 <div class="relative" x-data="{ open: false }">
-                    <button @click="open = !open" @click.outside="open = false" class="relative p-2.5 text-slate-400 hover:text-slate-700 bg-white border border-slate-200/80 rounded-xl shadow-sm hover:shadow transition-all focus:outline-none">
+                    <button @click="open = !open" @click.outside="open = false" class="relative p-2.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 rounded-xl shadow-sm hover:shadow transition-all focus:outline-none">
                         <i data-lucide="bell" class="w-4 h-4"></i>
                         {% if unread_notifications_count > 0 %}
-                        <span class="absolute top-2 right-2 w-2 h-2 bg-rose-500 rounded-full ring-2 ring-white animate-pulse"></span>
+                        <span class="absolute top-2 right-2 w-2 h-2 bg-rose-500 rounded-full ring-2 ring-white dark:ring-slate-800 animate-pulse"></span>
                         {% endif %}
                     </button>
-                    
-                    <div x-show="open" x-transition.opacity.duration.200ms style="display: none;" class="absolute right-0 mt-2 w-80 bg-white rounded-2xl shadow-xl border border-slate-200/80 overflow-hidden z-50">
-                        <div class="px-4 py-3 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-                            <h3 class="font-bold text-slate-800 text-sm">Notifications</h3>
+<!-- NOTIF_DROPDOWN_PLACEHOLDER -->
+                    <div x-show="open" x-transition.opacity.duration.200ms style="display: none;" class="absolute right-0 mt-2 w-80 bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200/80 dark:border-slate-700 overflow-hidden z-50">
+                        <div class="px-4 py-3 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between bg-slate-50/50 dark:bg-slate-800/50">
+                            <h3 class="font-bold text-slate-800 dark:text-slate-200 text-sm">Notifications</h3>
                             {% if unread_notifications_count > 0 %}
-                            <span class="text-[10px] font-bold bg-rose-100 text-rose-600 px-2 py-0.5 rounded-full">{{ unread_notifications_count }} nouvelles</span>
+                            <span class="text-[10px] font-bold bg-rose-100 dark:bg-rose-900/40 text-rose-600 dark:text-rose-400 px-2 py-0.5 rounded-full">{{ unread_notifications_count }} nouvelles</span>
                             {% endif %}
                         </div>
                         <div class="max-h-[300px] overflow-y-auto">
                             {% for notif in recent_notifications %}
-                            <a href="{% url 'dashboard:activity_logs' %}" class="block px-4 py-3 hover:bg-slate-50 border-b border-slate-50 transition-colors">
+                            <a href="{% url 'dashboard:activity_logs' %}" class="block px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-700/50 border-b border-slate-50 dark:border-slate-700/50 transition-colors">
                                 <div class="flex gap-3">
                                     <div class="mt-0.5">
                                         {% if notif.level == 'ERROR' %}
@@ -266,28 +225,28 @@
                                         {% endif %}
                                     </div>
                                     <div>
-                                        <p class="text-xs font-semibold text-slate-800">{{ notif.action }}</p>
-                                        <p class="text-[11px] text-slate-500 mt-0.5 line-clamp-2">{{ notif.description }}</p>
-                                        <p class="text-[10px] text-slate-400 mt-1">{{ notif.created_at|timesince }}</p>
+                                        <p class="text-xs font-semibold text-slate-800 dark:text-slate-200">{{ notif.action }}</p>
+                                        <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-2">{{ notif.description }}</p>
+                                        <p class="text-[10px] text-slate-400 dark:text-slate-500 mt-1">{{ notif.created_at|timesince }}</p>
                                     </div>
                                 </div>
                             </a>
                             {% empty %}
                             <div class="px-4 py-6 text-center">
-                                <i data-lucide="bell-off" class="w-6 h-6 text-slate-300 mx-auto mb-2"></i>
-                                <p class="text-xs text-slate-500">Aucune nouvelle alerte</p>
+                                <i data-lucide="bell-off" class="w-6 h-6 text-slate-300 dark:text-slate-600 mx-auto mb-2"></i>
+                                <p class="text-xs text-slate-500 dark:text-slate-400">Aucune nouvelle alerte</p>
                             </div>
                             {% endfor %}
                         </div>
-                        <a href="{% url 'dashboard:activity_logs' %}" class="block px-4 py-2.5 text-center text-xs font-bold text-brand-600 bg-brand-50 hover:bg-brand-100 transition-colors">
+                        <a href="{% url 'dashboard:activity_logs' %}" class="block px-4 py-2.5 text-center text-xs font-bold text-brand-600 dark:text-brand-400 bg-brand-50 dark:bg-brand-900/20 hover:bg-brand-100 dark:hover:bg-brand-900/40 transition-colors">
                             Voir tout le journal
                         </a>
                     </div>
                 </div>
 
-                <div class="h-8 w-px bg-slate-200/80 mx-2"></div>
-                <div class="flex items-center gap-2 text-sm font-medium text-slate-600 bg-white px-4 py-2 rounded-xl border border-slate-200/80 shadow-sm">
-                    <i data-lucide="calendar" class="w-4 h-4 text-slate-400"></i>
+                <div class="h-8 w-px bg-slate-200/80 dark:bg-slate-700 mx-2"></div>
+                <div class="flex items-center gap-2 text-sm font-medium text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 px-4 py-2 rounded-xl border border-slate-200/80 dark:border-slate-700 shadow-sm">
+                    <i data-lucide="calendar" class="w-4 h-4 text-slate-400 dark:text-slate-500"></i>
                     <span id="current-date"></span>
                 </div>
             </div>
@@ -303,10 +262,7 @@
     </div>
 
     <script>
-      // Initialize Icons
       lucide.createIcons();
-      
-      // Auto-hide toasts after 5 seconds
       setTimeout(() => {
           const toasts = document.querySelectorAll('.toast-message');
           toasts.forEach(toast => {
@@ -314,8 +270,6 @@
               setTimeout(() => toast.remove(), 300);
           });
       }, 5000);
-
-      // Set current date
       const dateOptions = { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' };
       document.getElementById('current-date').textContent = new Date().toLocaleDateString('fr-FR', dateOptions);
     </script>
