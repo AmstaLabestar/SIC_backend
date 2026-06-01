@@ -223,11 +223,13 @@ class SicRepository {
     required double amount,
     required String targetOperator,
     required String targetPhoneNumber,
+    String? pinToken,
   }) async {
     final response = await _api.deposit(
       amount: amount,
       targetOperator: targetOperator,
       targetPhoneNumber: targetPhoneNumber,
+      pinToken: pinToken,
     );
 
     if (response.isSuccess && response.data != null) {
@@ -246,11 +248,13 @@ class SicRepository {
     required double amount,
     required String targetOperator,
     required String targetPhoneNumber,
+    String? pinToken,
   }) async {
     final response = await _api.withdraw(
       amount: amount,
       targetOperator: targetOperator,
       targetPhoneNumber: targetPhoneNumber,
+      pinToken: pinToken,
     );
 
     if (response.isSuccess && response.data != null) {
@@ -269,11 +273,13 @@ class SicRepository {
     required double amount,
     required String sourcePuceId,
     required String targetPuceId,
+    String? pinToken,
   }) async {
     final response = await _api.convert(
       amount: amount,
       sourcePuceId: sourcePuceId,
       targetPuceId: targetPuceId,
+      pinToken: pinToken,
     );
 
     if (response.isSuccess && response.data != null) {
@@ -327,6 +333,41 @@ class SicRepository {
       );
     }
     return PinVerifyResult.error(response.error ?? 'Code PIN incorrect');
+  }
+
+  /// Register biometric public key for this device
+  Future<Result> registerBiometric({
+    required String deviceId,
+    required String publicKeyBase64,
+  }) async {
+    final response = await _api.registerBiometric(
+      deviceId: deviceId,
+      publicKeyBase64: publicKeyBase64,
+    );
+
+    if (response.isSuccess) {
+      return Result.success();
+    }
+    return Result.error(response.error ?? 'Erreur lors de l\'enregistrement biométrique');
+  }
+
+  /// Biometric login using device signature
+  Future<AuthResult> biometricLogin({
+    required String deviceId,
+    required int timestamp,
+    required String signatureBase64,
+  }) async {
+    final response = await _api.biometricLogin(
+      deviceId: deviceId,
+      timestamp: timestamp,
+      signatureBase64: signatureBase64,
+    );
+
+    if (response.isSuccess) {
+      await fetchAndCacheProfile();
+      return AuthResult.success();
+    }
+    return AuthResult.error(response.error ?? 'Erreur lors de l\'authentification biométrique');
   }
 
   // ============================================================================

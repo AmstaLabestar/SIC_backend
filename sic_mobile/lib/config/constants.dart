@@ -78,6 +78,7 @@ class StorageKeys {
   static const String isDarkMode = 'is_dark_mode';
   static const String biometricsEnabled = 'biometrics_enabled';
   static const String pinSetup = 'pin_setup';
+  static const String biometricDeviceId = 'biometric_device_id';
   static const String lastSync = 'last_sync';
   static const String pendingActions = 'pending_actions';
 }

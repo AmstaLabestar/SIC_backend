@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 import 'package:sic_mobile/config/theme.dart';
 import 'package:sic_mobile/config/constants.dart';
 import 'package:sic_mobile/data/repositories/sic_repository.dart';
+import 'package:sic_mobile/core/services/biometric_service.dart';
+import 'package:sic_mobile/core/services/storage_service.dart';
 
 /// Splash Screen
 class SplashScreen extends ConsumerStatefulWidget {
@@ -365,14 +367,64 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
                 // Biometric login
                 OutlinedButton.icon(
-                  onPressed: () {
-                    // TODO: Biometric login
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Configuration biométrique requise'),
-                      ),
-                    );
-                  },
+                  onPressed: _isLoading
+                      ? null
+                      : () async {
+                          setState(() => _isLoading = true);
+                          try {
+                            final biometric = BiometricService();
+                            final storage = StorageService();
+
+                            final authLocal = await biometric.authenticate(
+                              reason: 'Authentifiez-vous pour vous connecter',
+                            );
+                            if (!authLocal.isSuccess) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Authentification biométrique annulée')),
+                              );
+                              return;
+                            }
+
+                            final deviceId = await storage.readSecure(StorageKeys.biometricDeviceId);
+                            if (deviceId == null) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Aucun appareil biométrique enregistré')),
+                              );
+                              return;
+                            }
+
+                            final timestamp = DateTime.now().millisecondsSinceEpoch;
+                            final signature = await biometric.signChallenge(deviceId, timestamp);
+                            if (signature.isEmpty) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Échec de la signature biométrique')),
+                              );
+                              return;
+                            }
+
+                            final repo = ref.read(sicRepositoryProvider);
+                            final result = await repo.biometricLogin(
+                              deviceId: deviceId,
+                              timestamp: timestamp,
+                              signatureBase64: signature,
+                            );
+
+                            if (result.isSuccess) {
+                              context.go('/home');
+                            } else {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text(result.error ?? 'Échec de la connexion biométrique')),
+                              );
+                            }
+                          } catch (e) {
+                            if (kDebugMode) print('Biometric login error: $e');
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Erreur lors de la connexion biométrique')),
+                            );
+                          } finally {
+                            if (mounted) setState(() => _isLoading = false);
+                          }
+                        },
                   icon: const Icon(Icons.fingerprint),
                   label: const Text('Se connecter avec empreintes'),
                   style: OutlinedButton.styleFrom(

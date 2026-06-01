@@ -1,8 +1,18 @@
 import 'dart:convert';
-import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:uuid/uuid.dart';
+import 'package:cryptography/cryptography.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+
+// Platform-specific secure storage options
+final _androidOptions = AndroidOptions(
+  encryptedSharedPreferences: true,
+);
+
+final _iOptions = IOSOptions(
+  accessibility: IOSAccessibility.first_unlock,
+);
 
 /// Biometric Service for SIC Mobile
 /// Handles fingerprint authentication and device registration
@@ -98,40 +108,88 @@ class BiometricService {
     return const Uuid().v4();
   }
 
-  /// Generate a key pair for device authentication (simplified)
-  /// In production, use flutter_secure_storage with RSA keys
+  /// Generate an Ed25519 key pair for device authentication.
+  /// Stores the private key securely and returns the public key (base64) + device_id.
   Future<DeviceKeyPair> generateKeyPair() async {
-    // Generate a simple key pair for HMAC signature
-    // In production, use proper RSA/ECDH key exchange
     final deviceId = generateDeviceId();
-    final timestamp = DateTime.now().millisecondsSinceEpoch;
-    final secret = '$deviceId:$timestamp:device_key';
+    final algorithm = Ed25519();
 
-    // Generate a signature
-    final signature = md5.convert(utf8.encode(secret)).toString();
+    // Generate key pair
+    final keyPair = await algorithm.newKeyPair();
+
+    // Extract key material
+    final keyPairData = await keyPair.extract();
+    final privateKeyBytes = keyPairData.bytes;
+
+    // Extract public key
+    final publicKey = await algorithm.extractPublicKey(keyPair);
+    final publicKeyBytes = publicKey.bytes;
+
+    // Store private key securely (base64) using platform keystore/keychain options
+    final storage = const FlutterSecureStorage();
+    await storage.write(
+      key: 'biometric_private_$deviceId',
+      value: base64.encode(privateKeyBytes),
+      aOptions: _androidOptions,
+      iOptions: _iOptions,
+    );
 
     return DeviceKeyPair(
       deviceId: deviceId,
-      publicKey: signature,
-      privateKey: secret,
+      publicKey: base64.encode(publicKeyBytes),
+      privateKey: base64.encode(privateKeyBytes),
     );
   }
 
-  /// Sign a challenge for biometric login
-  String signChallenge(String deviceId, int timestamp, String publicKey) {
-    final data = '$deviceId:$timestamp:$publicKey';
-    return md5.convert(utf8.encode(data)).toString();
+  /// Sign a challenge for biometric login using stored private key (Ed25519).
+  Future<String> signChallenge(String deviceId, int timestamp) async {
+    final storage = const FlutterSecureStorage();
+    final key = await storage.read(
+      key: 'biometric_private_$deviceId',
+      aOptions: _androidOptions,
+      iOptions: _iOptions,
+    );
+    if (key == null) return '';
+
+    final privateKeyBytes = base64.decode(key);
+    final algorithm = Ed25519();
+
+    final message = utf8.encode('$deviceId:$timestamp');
+
+    // Recreate key pair from private key bytes
+    final keyPair = SimpleKeyPairData(privateKeyBytes, type: KeyPairType.ed25519);
+    final signature = await algorithm.sign(
+      message,
+      keyPair: keyPair,
+    );
+
+    return base64.encode(signature.bytes);
   }
 
-  /// Verify a signature
-  bool verifySignature(
-    String signature,
+  /// Verify a signature locally (debugging) - not used in production
+  Future<bool> verifySignature(
+    String signatureBase64,
     String deviceId,
     int timestamp,
-    String publicKey,
-  ) {
-    final expected = signChallenge(deviceId, timestamp, publicKey);
-    return signature == expected;
+    String publicKeyBase64,
+  ) async {
+    try {
+      final algorithm = Ed25519();
+      final pubBytes = base64.decode(publicKeyBase64);
+      final sigBytes = base64.decode(signatureBase64);
+      final message = utf8.encode('$deviceId:$timestamp');
+
+      final publicKey = SimplePublicKey(pubBytes, type: KeyPairType.ed25519);
+      // Use the algorithm to verify
+      await algorithm.verify(
+        message,
+        signature: Signature(sigBytes, publicKey: publicKey),
+      );
+      return true;
+    } catch (e) {
+      if (kDebugMode) print('Local verify failed: $e');
+      return false;
+    }
   }
 
   /// Check if signature is expired (5 minute window)

@@ -294,6 +294,57 @@ class ApiService {
     }
   }
 
+  Future<ApiResponse> registerBiometric({
+    required String deviceId,
+    required String publicKeyBase64,
+  }) async {
+    try {
+      final response = await post(
+        ApiConstants.biometricRegister,
+        data: {
+          'device_id': deviceId,
+          'public_key': publicKeyBase64,
+        },
+      );
+      return ApiResponse.success(response.data);
+    } on DioException catch (e) {
+      return ApiResponse.error(_handleDioError(e));
+    } catch (e) {
+      return ApiResponse.error('Une erreur est survenue');
+    }
+  }
+
+  Future<ApiResponse> biometricLogin({
+    required String deviceId,
+    required int timestamp,
+    required String signatureBase64,
+  }) async {
+    try {
+      final response = await post(
+        ApiConstants.biometricLogin,
+        data: {
+          'device_id': deviceId,
+          'timestamp': timestamp,
+          'signature': signatureBase64,
+        },
+      );
+      if (response.statusCode == 200 && response.data != null) {
+        // Save tokens if provided
+        if (response.data['access'] != null) {
+          await saveTokens(
+            accessToken: response.data['access'],
+            refreshToken: response.data['refresh'] ?? '',
+          );
+        }
+      }
+      return ApiResponse.success(response.data);
+    } on DioException catch (e) {
+      return ApiResponse.error(_handleDioError(e));
+    } catch (e) {
+      return ApiResponse.error('Une erreur est survenue');
+    }
+  }
+
   Future<ApiResponse> logout() async {
     try {
       final refreshToken = await getRefreshToken();
@@ -347,6 +398,7 @@ class ApiService {
     required double amount,
     required String targetOperator,
     required String targetPhoneNumber,
+    String? pinToken,
   }) async {
     try {
       final response = await post(
@@ -355,6 +407,7 @@ class ApiService {
           'amount': amount,
           'target_operator': targetOperator.toUpperCase(),
           'target_phone_number': targetPhoneNumber,
+          if (pinToken != null) 'pin_token': pinToken,
         },
       );
       return ApiResponse.success(response.data);
@@ -369,6 +422,7 @@ class ApiService {
     required double amount,
     required String targetOperator,
     required String targetPhoneNumber,
+    String? pinToken,
   }) async {
     try {
       final response = await post(
@@ -377,6 +431,7 @@ class ApiService {
           'amount': amount,
           'target_operator': targetOperator.toUpperCase(),
           'target_phone_number': targetPhoneNumber,
+          if (pinToken != null) 'pin_token': pinToken,
         },
       );
       return ApiResponse.success(response.data);
@@ -391,6 +446,7 @@ class ApiService {
     required double amount,
     required String sourcePuceId,
     required String targetPuceId,
+    String? pinToken,
   }) async {
     try {
       final response = await post(
@@ -399,6 +455,7 @@ class ApiService {
           'amount': amount,
           'source_puce_id': sourcePuceId,
           'target_puce_id': targetPuceId,
+          if (pinToken != null) 'pin_token': pinToken,
         },
       );
       return ApiResponse.success(response.data);

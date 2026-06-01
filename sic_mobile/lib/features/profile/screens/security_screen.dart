@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/foundation.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sic_mobile/config/theme.dart';
 import 'package:sic_mobile/core/services/biometric_service.dart';
@@ -62,6 +63,30 @@ class _SecurityScreenState extends ConsumerState<SecurityScreen> {
       );
 
       if (!result.isSuccess) {
+        return;
+      }
+      // Generate key pair and register public key with backend
+      try {
+        final keyPair = await _biometricService.generateKeyPair();
+        final repo = ref.read(sicRepositoryProvider);
+        final resp = await repo.registerBiometric(
+          deviceId: keyPair.deviceId,
+          publicKeyBase64: keyPair.publicKey,
+        );
+        if (resp.isSuccess) {
+          await _storageService.saveSecure(StorageKeys.biometricDeviceId, keyPair.deviceId);
+        }
+        if (!resp.isSuccess) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Enregistrement biométrique échoué: ${resp.error}')),
+          );
+          return;
+        }
+      } catch (e) {
+        if (kDebugMode) print('Biometric register failed: $e');
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Erreur lors de l\'enregistrement biométrique')),
+        );
         return;
       }
     }
