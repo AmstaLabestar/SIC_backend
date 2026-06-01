@@ -154,8 +154,10 @@ L'application se connecte au backend Django REST Framework:
 - Tokens JWT avec refresh automatique
 - Stockage sécurisé des credentials
 - PIN requis pour transactions sensibles
-- Biométrie pour déverrouillage
+- Biométrie basée sur signatures Ed25519
+- Clé privée stockée dans le keystore/keychain natif via `flutter_secure_storage`
 - Validation côté client et serveur
+- Legacy biometric fallback disabled by default in production
 
 ## 📄 Licence
 
