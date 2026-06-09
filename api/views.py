@@ -1126,7 +1126,7 @@ class BiometricLoginView(generics.GenericAPIView):
 
         if not verified:
             # Allow legacy MD5/HMAC only if explicitly enabled via settings flag
-                allow_legacy = getattr(settings, 'ALLOW_LEGACY_BIOMETRIC', False)
+            allow_legacy = getattr(settings, 'ALLOW_LEGACY_BIOMETRIC', False)
             if allow_legacy:
                 try:
                     # legacy MD5 over device_id:timestamp:public_key

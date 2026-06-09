@@ -195,6 +195,11 @@ USE_I18N = True
 
 USE_TZ = True
 
+# Format des nombres (Séparateur de milliers)
+USE_THOUSAND_SEPARATOR = True
+THOUSAND_SEPARATOR = '.'
+NUMBER_GROUPING = 3
+
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/6.0/howto/static-files/

@@ -242,6 +242,12 @@ def transactions(request, tx_type=None):
         transaction_list = Transaction.objects.all().order_by('-created_at')
         page_title = "Historique des Transactions"
         
+    # Apply operator filter if present
+    operator_filter = request.GET.get('operator')
+    if operator_filter:
+        transaction_list = transaction_list.filter(target_operator=operator_filter)
+        page_title += f" ({operator_filter})"
+
     if request.GET.get('export') == 'csv':
         response = HttpResponse(content_type='text/csv')
         response['Content-Disposition'] = f'attachment; filename="transactions_{tx_type or "all"}_{timezone.now().strftime("%Y%m%d")}.csv"'

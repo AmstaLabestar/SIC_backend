@@ -98,6 +98,11 @@
                                 </a>
                                 {% endif %}
 
+                                <!-- Bouton pour voir les détails dans l'Admin Django -->
+                                <a href="{% url 'admin:core_agent_change' agent.id %}" target="_blank" title="Voir détails" class="p-2 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 hover:bg-indigo-600 hover:text-white rounded-xl transition-colors">
+                                    <i data-lucide="eye" class="w-4 h-4"></i>
+                                </a>
+
                             </div>
                         </td>
 

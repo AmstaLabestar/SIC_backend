@@ -43,6 +43,7 @@
                         <th class="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Date & Heure</th>
                         <th class="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Agent Initiateur</th>
                         <th class="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Type</th>
+                        <th class="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Opérateur</th>
                         <th class="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-right">Montant (FCFA)</th>
                         <th class="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-right">Statut</th>
                         <th class="px-6 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-center">Action</th>
@@ -95,6 +96,13 @@
                             </div>
                         </td>
 
+                        <!-- Opérateur -->
+                        <td class="px-6 py-4">
+                            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-600">
+                                <i data-lucide="smartphone" class="w-3.5 h-3.5"></i> {{ tx.target_operator }}
+                            </span>
+                        </td>
+
                         <!-- Amount -->
                         <td class="px-6 py-4 text-right">
                             <span class="text-base font-black font-mono text-slate-900 dark:text-white">{{ tx.amount|floatformat:"0" }}</span>
@@ -131,7 +139,7 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="6" class="px-6 py-12 text-center text-slate-500 dark:text-slate-400">
+                        <td colspan="7" class="px-6 py-12 text-center text-slate-500 dark:text-slate-400">
                             <div class="flex flex-col items-center justify-center">
                                 <i data-lucide="arrow-left-right" class="w-12 h-12 text-slate-300 dark:text-slate-600 mb-3"></i>
                                 <p>Aucune transaction enregistrée.</p>
