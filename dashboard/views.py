@@ -2,6 +2,7 @@ import csv
 from django.http import HttpResponse
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.admin.views.decorators import staff_member_required
+from django.views.decorators.http import require_POST
 from django.core.paginator import Paginator
 from django.db.models import Sum, Count
 from django.utils import timezone
@@ -221,11 +222,29 @@ def home(request):
 
 @staff_member_required(login_url='dashboard:login')
 def agents(request):
+    from django.db.models import Q
     agent_list = Agent.objects.all().order_by('-created_at')
+    
+    search_query = request.GET.get('search')
+    if search_query:
+        agent_list = agent_list.filter(
+            Q(first_name__icontains=search_query) | 
+            Q(last_name__icontains=search_query) | 
+            Q(phone_number__icontains=search_query)
+        )
+        
+    status_filter = request.GET.get('status')
+    if status_filter:
+        agent_list = agent_list.filter(kyc_status=status_filter)
+        
     paginator = Paginator(agent_list, 20)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
-    return render(request, 'dashboard/agents.html', {'page_obj': page_obj})
+    return render(request, 'dashboard/agents.html', {
+        'page_obj': page_obj,
+        'search_query': search_query,
+        'status_filter': status_filter
+    })
 
 @staff_member_required(login_url='dashboard:login')
 def transactions(request, tx_type=None):
@@ -248,6 +267,11 @@ def transactions(request, tx_type=None):
         transaction_list = transaction_list.filter(target_operator=operator_filter)
         page_title += f" ({operator_filter})"
 
+    # Apply status filter if present
+    status_filter = request.GET.get('status')
+    if status_filter:
+        transaction_list = transaction_list.filter(status=status_filter)
+
     if request.GET.get('export') == 'csv':
         response = HttpResponse(content_type='text/csv')
         response['Content-Disposition'] = f'attachment; filename="transactions_{tx_type or "all"}_{timezone.now().strftime("%Y%m%d")}.csv"'
@@ -264,13 +288,20 @@ def transactions(request, tx_type=None):
     paginator = Paginator(transaction_list, 50)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
-    return render(request, 'dashboard/transactions.html', {'page_obj': page_obj, 'page_title': page_title, 'tx_type': tx_type})
+    return render(request, 'dashboard/transactions.html', {
+        'page_obj': page_obj, 
+        'page_title': page_title, 
+        'tx_type': tx_type,
+        'operator_filter': operator_filter,
+        'status_filter': status_filter
+    })
 
 @staff_member_required(login_url='dashboard:login')
 def transaction_detail(request, tx_id):
     tx = get_object_or_404(Transaction, id=tx_id)
     return render(request, 'dashboard/transaction_detail.html', {'transaction': tx})
 
+@require_POST
 @staff_member_required(login_url='dashboard:login')
 def agent_kyc_action(request, agent_id, action):
     agent = get_object_or_404(Agent, id=agent_id)
@@ -383,6 +414,7 @@ def report_detail(request, report_id):
     }
     return render(request, 'dashboard/report_detail.html', context)
 
+@require_POST
 @staff_member_required(login_url='dashboard:login')
 def report_delete(request, report_id):
     report = get_object_or_404(Report, id=report_id)

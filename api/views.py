@@ -509,28 +509,9 @@ class TransactionViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, views
                 target_puce=target_puce
             )
 
-            # Simulation webhook pour développement
-            # En production, CinetPay appellera le webhook真实的
-            if settings.DEBUG:
-                # Simuler le succès immédiat
-                detail = tx.compensation_details.first()
-                if detail:
-                    detail.status = 'SUCCESS'
-                    detail.save()
-                    source_puce.balance -= tx.amount
-                    source_puce.save()
-                    target_puce.balance += tx.amount
-                    target_puce.save()
-                    tx.status = 'COMPLETED'
-                    tx.save()
-
-                    log_activity(
-                        agent=agent,
-                        action="TX_CONVERSION_COMPLETED",
-                        description=f"Conversion de {tx.amount} FCFA de {source_puce.operator} vers {target_puce.operator} complétée.",
-                        level="SUCCESS",
-                        ip_address=request.META.get('REMOTE_ADDR')
-                    )
+            # IMPORTANT: La transaction est créée avec le statut PENDING par le CompensationEngine.
+            # Le véritable statut final sera défini par le webhook CinetPay.
+            # En environnement de test/développement, vous devez appeler manuellement le webhook avec une signature valide.
 
             return Response({
                 'message': 'Conversion initiée',
@@ -593,32 +574,31 @@ class TransactionViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, views
                 {'error': 'Missing ref'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        # Vérification de la signature HMAC - exiger la clé en production
-        if not secret_key and not settings.DEBUG:
+        # Vérification de la signature HMAC - Exiger la clé MÊME en développement pour éviter le contournement
+        if not secret_key:
             logger.error("Webhook: secret key not configured for CinetPay webhooks")
             return Response(
                 {'error': 'Webhook secret not configured'},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE
             )
 
-        if secret_key:
-            expected_token = hmac.new(
-                secret_key.encode('utf-8'),
-                (site_id + str(ref)).encode('utf-8'),
-                hashlib.sha256
-            ).hexdigest()
+        expected_token = hmac.new(
+            secret_key.encode('utf-8'),
+            (site_id + str(ref)).encode('utf-8'),
+            hashlib.sha256
+        ).hexdigest()
 
-            if not hmac.compare_digest(x_token, expected_token):
-                logger.warning(f"Webhook: Signature invalide pour {ref}")
-                log_activity(
-                    action="WEBHOOK_INVALID_SIGNATURE",
-                    description=f"Tentative de webhook avec signature invalide: {ref[:20]}...",
-                    level="ERROR"
-                )
-                return Response(
-                    {'error': 'Invalid signature'},
-                    status=status.HTTP_403_FORBIDDEN
-                )
+        if not hmac.compare_digest(x_token, expected_token):
+            logger.warning(f"Webhook: Signature invalide pour {ref}")
+            log_activity(
+                action="WEBHOOK_INVALID_SIGNATURE",
+                description=f"Tentative de webhook avec signature invalide: {ref[:20]}...",
+                level="ERROR"
+            )
+            return Response(
+                {'error': 'Invalid signature'},
+                status=status.HTTP_403_FORBIDDEN
+            )
 
         # Traiter le webhook via le moteur de compensation
         payment_status = request.data.get('cpm_payment_status', '')
