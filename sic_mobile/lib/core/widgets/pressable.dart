@@ -13,7 +13,6 @@ class Pressable extends StatefulWidget {
     this.pressedScale = 0.97,
     this.duration = const Duration(milliseconds: 120),
     this.haptic = HapticType.selection,
-    this.borderRadius,
     this.semanticLabel,
   });
 
@@ -22,7 +21,6 @@ class Pressable extends StatefulWidget {
   final double pressedScale;
   final Duration duration;
   final HapticType haptic;
-  final BorderRadius? borderRadius;
   final String? semanticLabel;
 
   @override

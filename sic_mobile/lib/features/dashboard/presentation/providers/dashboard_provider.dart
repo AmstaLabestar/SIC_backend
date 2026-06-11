@@ -54,7 +54,8 @@ class DashboardNotifier extends AsyncNotifier<AgentSummary> {
   }
 
   Future<void> refresh() async {
-    state = const AsyncLoading<AgentSummary>();
+    // Pas de flash blanc : on garde l'etat precedent visible pendant le reload
+    // (le RefreshIndicator fournit deja un retour visuel).
     state = await AsyncValue.guard(_loadDashboard);
   }
 

@@ -8,6 +8,7 @@ import '../../features/auth/presentation/providers/auth_provider.dart';
 import '../../features/auth/presentation/screens/login_screen.dart';
 import '../../features/auth/presentation/screens/splash_screen.dart';
 import '../../features/dashboard/presentation/screens/dashboard_screen.dart';
+import '../../features/operations/presentation/screens/operation_placeholder_screen.dart';
 import '../../features/settings/presentation/screens/settings_screen.dart';
 import '../../features/sim_management/presentation/screens/sim_management_screen.dart';
 import '../../features/stats/presentation/screens/stats_screen.dart';
@@ -51,6 +52,26 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/login',
         builder: (context, state) => const LoginScreen(),
+      ),
+      GoRoute(
+        path: '/operations/depot',
+        builder: (context, state) =>
+            const OperationPlaceholderScreen(label: 'Depot'),
+      ),
+      GoRoute(
+        path: '/operations/retrait',
+        builder: (context, state) =>
+            const OperationPlaceholderScreen(label: 'Retrait'),
+      ),
+      GoRoute(
+        path: '/operations/transfert',
+        builder: (context, state) =>
+            const OperationPlaceholderScreen(label: 'Transfert'),
+      ),
+      GoRoute(
+        path: '/operations/recharge',
+        builder: (context, state) =>
+            const OperationPlaceholderScreen(label: 'Recharge'),
       ),
       ShellRoute(
         builder: (context, state, child) => AppShell(child: child),

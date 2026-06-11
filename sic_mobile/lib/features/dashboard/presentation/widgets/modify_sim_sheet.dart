@@ -41,7 +41,13 @@ class _ModifySimSheetState extends ConsumerState<ModifySimSheet> {
   void initState() {
     super.initState();
     _phoneController = TextEditingController(text: widget.balance.phoneNumber);
-    _operatorCode = widget.balance.operatorCode;
+    // Fallback si l'operateur de la SIM n'est pas dans la liste connue.
+    final operators = ref.read(availableOperatorsProvider);
+    _operatorCode = operators.containsKey(widget.balance.operatorCode)
+        ? widget.balance.operatorCode
+        : (operators.keys.isNotEmpty
+            ? operators.keys.first
+            : widget.balance.operatorCode);
     _isActive = widget.balance.isActive;
   }
 

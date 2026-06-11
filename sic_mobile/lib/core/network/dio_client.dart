@@ -23,5 +23,8 @@ Dio createDioClient({
     AuthInterceptor(storage: storage, onSessionExpired: onSessionExpired),
   );
 
+  // TODO(security): activer le certificate pinning (SHA-256 du cert backend)
+  // via un HttpClientAdapter/badCertificateCallback avant la mise en production.
+
   return dio;
 }

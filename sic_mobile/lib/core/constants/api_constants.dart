@@ -31,6 +31,13 @@ class ApiConstants {
   static const commissions = '/commissions/';
   static const health = '/health/';
 
+  // Operations (Phase 3+)
+  static const deposit = '/transactions/deposit/';
+  static const withdraw = '/transactions/withdraw/';
+  static const conversion = '/transactions/conversion/';
+  static const webhook = '/transactions/webhook/';
+
   static String puce(String id) => '/puces/$id/';
   static String puceTopup(String id) => '/puces/$id/topup/';
+  static String transaction(String id) => '/transactions/$id/';
 }

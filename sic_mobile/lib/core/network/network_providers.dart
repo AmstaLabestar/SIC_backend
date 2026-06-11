@@ -1,6 +1,8 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../app_globals.dart';
 import '../storage/token_storage.dart';
 import '../../features/auth/presentation/providers/auth_provider.dart';
 import 'dio_client.dart';
@@ -16,6 +18,16 @@ final dioProvider = Provider<Dio>((ref) {
   final storage = ref.watch(tokenStorageProvider);
   return createDioClient(
     storage: storage,
-    onSessionExpired: () => ref.read(authControllerProvider.notifier).onExpired(),
+    onSessionExpired: () {
+      scaffoldMessengerKey.currentState
+        ?..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            behavior: SnackBarBehavior.floating,
+            content: Text('Session expiree. Reconnectez-vous.'),
+          ),
+        );
+      ref.read(authControllerProvider.notifier).onExpired();
+    },
   );
 });
