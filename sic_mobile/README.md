@@ -1,166 +1,119 @@
-# SIC Mobile - Application Flutter
+# SIC Mobile — Système Inter-Connexion
 
-Application mobile pour agents SIC - Plateforme fintech de transactions mobile money.
+> Application mobile Flutter pour agents PDV — interconnexion Mobile Money multi-opérateurs.
 
-## 🚀 Fonctionnalités
+[![Flutter](https://img.shields.io/badge/Flutter-3.x-blue)](https://flutter.dev)
+[![Dart](https://img.shields.io/badge/Dart-3.x-blue)](https://dart.dev)
+[![Architecture](https://img.shields.io/badge/Architecture-Clean-green)](docs/ARCHITECTURE.md)
+[![License](https://img.shields.io/badge/License-Proprietary-red)](LICENSE)
 
-### Authentification
-- ✅ Connexion avec username/password (JWT)
-- ✅ Inscription avec validation
-- ✅ Code PIN (4-6 chiffres)
-- ✅ Authentification biométrique (empreinte digitale)
-- ✅ Déconnexion sécurisée
+---
 
-### Dashboard
-- ✅ Solde total des puces
-- ✅ Liste des puces avec solde individuel
-- ✅ Boutons d'action rapide
-- ✅ Transactions récentes
-- ✅ Pull-to-refresh
+## Vue d'ensemble
 
-### Transactions
-- ✅ Dépôt vers Mobile Money
-- ✅ Retrait depuis Mobile Money
-- ✅ Conversion entre puces
-- ✅ Historique avec filtres
-- ✅ Détail des transactions
-- ✅ Statuts en temps réel
+SIC Mobile permet aux agents PDV de gérer tous leurs portefeuilles Mobile Money (Orange Money, Moov Money, Telecel, MTN…) depuis une seule interface. L'app détecte automatiquement les insuffisances de solde et guide l'agent dans des compensations inter-réseaux étape par étape.
 
-### Gestion des Puces
-- ✅ Liste des puces SIM
-- ✅ Ajout de puce
-- ✅ Solde par puce
-- ✅ Opérateurs supportés (Orange, Moov, Togocel, Coris)
+**Acteurs :** Agents PDV · Clients finaux · Plateforme SIC (commission automatique)
 
-### Profil & Sécurité
-- ✅ Informations du compte
-- ✅ Vérification KYC
-- ✅ Configuration PIN
-- ✅ Empreinte digitale
-- ✅ Appareils enregistrés
-- ✅ Paramètres de sécurité
+---
 
-## 🛠️ Installation
+## Documentation
 
-### Prérequis
-- Flutter SDK 3.0+
-- Dart 3.0+
-- Android Studio / Xcode
-- PostgreSQL (backend)
-- Redis (pour Celery)
+| Fichier | Contenu |
+|---|---|
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Clean Architecture, structure des dossiers, principes SOLID |
+| [docs/ENVIRONMENT.md](docs/ENVIRONMENT.md) | Installation, outils, configuration VS Code, Windows |
+| [docs/CONVENTIONS.md](docs/CONVENTIONS.md) | Conventions Git, nommage, style de code Dart |
+| [docs/PHASE2.md](docs/PHASE2.md) | Roadmap Phase 2 — Dashboard & gestion des puces |
+| [docs/PROMPTS_PHASE2.md](docs/PROMPTS_PHASE2.md) | Prompts IA étape par étape pour coder la Phase 2 |
+| [docs/BACKEND_CONTRACT.md](docs/BACKEND_CONTRACT.md) | Contrat API attendu du backend Django (endpoints, modèles) |
 
-### Installation des dépendances
+---
 
-```bash
-cd sic_mobile
-flutter pub get
+## Phases du projet
+
+```
+Phase 1 — Auth & Onboarding        [ À venir ]
+Phase 2 — Dashboard & Puces        [ EN COURS ]
+Phase 3 — Moteur Opérations        [ À venir ]
+Phase 4 — Historique & Reporting   [ À venir ]
+Phase 5 — Tests & Déploiement      [ À venir ]
 ```
 
-### Lancer l'application
+---
+
+## Stack technique
+
+| Couche | Technologie | Rôle |
+|---|---|---|
+| UI | Flutter 3.x (Dart) | App iOS + Android |
+| État | Riverpod 2.x | State management réactif |
+| Navigation | go_router | Navigation déclarative + guards |
+| Réseau | Dio + Retrofit | Appels API REST |
+| Cache local | Hive / Isar | Offline — soldes, historique |
+| Animations | flutter_animate | Micro-interactions, transitions |
+| Graphiques | fl_chart | Dashboard bénéfices |
+| Auth locale | local_auth | Biométrie (empreinte / Face ID) |
+| Notifications | firebase_messaging | Push FCM |
+| PDF | pdf + printing | Reçus transactions |
+| Qualité | flutter_lints + custom analysis | Linting strict |
+
+---
+
+## Démarrage rapide
+
+> Pré-requis : Flutter 3.x installé, VS Code, Android Studio (émulateur)
+> Voir [docs/ENVIRONMENT.md](docs/ENVIRONMENT.md) pour la configuration complète.
 
 ```bash
-# Mode développement
+# 1. Cloner le repo
+git clone https://github.com/[org]/sic-mobile.git
+cd sic-mobile
+
+# 2. Installer les dépendances
+flutter pub get
+
+# 3. Générer les fichiers auto-générés (Riverpod, Retrofit, Hive)
+dart run build_runner build --delete-conflicting-outputs
+
+# 4. Lancer sur émulateur
 flutter run
 
-# Mode debug
-flutter run --debug
-
-# Release
-flutter run --release
+# 5. Lancer les tests
+flutter test
 ```
 
-### Configuration
+---
 
-1. Modifier `lib/config/constants.dart` pour configurer l'URL de l'API:
-```dart
-static const String baseUrl = 'http://votre-serveur:8000/api';
+## Branches
+
+| Branche | Rôle |
+|---|---|
+| `main` | Production — protégée, merge via PR uniquement |
+| `develop` | Intégration — base de travail |
+| `feature/phase2-*` | Fonctionnalités Phase 2 |
+| `fix/*` | Corrections de bugs |
+
+---
+
+## Variables d'environnement
+
+Créer un fichier `.env` à la racine (non commité) :
+
+```env
+API_BASE_URL=http://10.0.2.2:8000/api/v1
+API_TIMEOUT=30000
+ENV=development
 ```
 
-2. Configurer le backend Django dans le dossier parent:
-```bash
-cd ..
-python manage.py runserver
-```
+> `.env` est dans `.gitignore`. Ne jamais commiter les clés API.
 
-## 📱 Captures d'écran
+---
 
-*(À ajouter)*
+## Contacts
 
-## 🏗️ Architecture
-
-```
-sic_mobile/
-├── lib/
-│   ├── config/          # Configuration (theme, routes, constants)
-│   ├── core/            # Services core (API, storage, biometric)
-│   │   ├── services/
-│   │   └── utils/
-│   ├── data/            # Modèles et repositories
-│   │   ├── models/
-│   │   ├── providers/
-│   │   └── repositories/
-│   ├── features/        # Fonctionnalités par module
-│   │   ├── auth/
-│   │   ├── home/
-│   │   ├── transactions/
-│   │   ├── puces/
-│   │   └── profile/
-│   └── shared/         # Widgets réutilisables
-│       └── widgets/
-├── assets/             # Images, icônes, animations
-└── pubspec.yaml       # Dépendances
-```
-
-## 🎨 Design System
-
-### Couleurs (Indigo/Violet)
-- Primary: `#6366F1` (Indigo)
-- Secondary: `#8B5CF6` (Violet)
-- Success: `#10B981` (Emerald)
-- Warning: `#F59E0B` (Amber)
-- Error: `#EF4444` (Red)
-
-### Typographie
-- Headlines: Outfit Bold
-- Body: Inter Regular
-
-## 🔗 Backend API
-
-L'application se connecte au backend Django REST Framework:
-
-| Endpoint | Description |
-|----------|-------------|
-| `/api/auth/login/` | Connexion JWT |
-| `/api/auth/register/` | Inscription |
-| `/api/auth/pin/setup/` | Configuration PIN |
-| `/api/auth/biometric/login/` | Login biométrique |
-| `/api/transactions/deposit/` | Effectuer un dépôt |
-| `/api/transactions/withdraw/` | Effectuer un retrait |
-| `/api/transactions/` | Liste des transactions |
-| `/api/puces/` | Gestion des puces |
-
-## 📦 Dépendances principales
-
-- **flutter_riverpod** - Gestion d'état
-- **go_router** - Navigation
-- **dio** - Client HTTP
-- **flutter_secure_storage** - Stockage sécurisé
-- **local_auth** - Authentification biométrique
-- **google_fonts** - Typographie
-- **intl** - Formatage dates/nombres
-
-## 🔒 Sécurité
-
-- Tokens JWT avec refresh automatique
-- Stockage sécurisé des credentials
-- PIN requis pour transactions sensibles
-- Biométrie pour déverrouillage
-- Validation côté client et serveur
-
-## 📄 Licence
-
-Propriétaire - SIC Fintech
-
-## 👨‍💻 Auteur
-
-Abdouldav-cyber
+| Rôle | Responsabilité |
+|---|---|
+| Dev Frontend (toi) | Flutter, UI/UX, intégration API |
+| Dev Backend | Django, API REST, base de données |
+| Chef de Projet | Validation, livraisons client |

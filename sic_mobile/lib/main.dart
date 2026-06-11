@@ -1,35 +1,30 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:sic_mobile/config/theme.dart';
-import 'package:sic_mobile/config/routes.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 
-void main() {
+import 'core/constants/app_theme.dart';
+import 'core/router/app_router.dart';
+
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(
-    const ProviderScope(
-      child: SicMobileApp(),
-    ),
-  );
+  await dotenv.load(isOptional: true);
+  await Hive.initFlutter();
+
+  runApp(const ProviderScope(child: SicMobileApp()));
 }
 
-/// SIC Mobile Application
 class SicMobileApp extends ConsumerWidget {
   const SicMobileApp({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final router = ref.watch(routerProvider);
+    final router = ref.watch(appRouterProvider);
 
     return MaterialApp.router(
       title: 'SIC Mobile',
       debugShowCheckedModeBanner: false,
-
-      // Theme
-      theme: SicTheme.lightTheme,
-      darkTheme: SicTheme.darkTheme,
-      themeMode: ThemeMode.system,
-
-      // Router
+      theme: AppTheme.lightTheme,
       routerConfig: router,
     );
   }
