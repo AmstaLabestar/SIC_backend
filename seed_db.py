@@ -17,22 +17,25 @@ def run_seeder():
     Agent.objects.all().delete()
     User.objects.filter(is_staff=False).delete()
     
-    print("Creating test agents...")
-    agents_data = [
-        {"username": "agent_alpha", "first": "Jean", "last": "Dupont", "phone": "0102030405", "status": "APPROVED"},
-        {"username": "agent_beta", "first": "Marie", "last": "Kone", "phone": "0506070809", "status": "APPROVED"},
-        {"username": "agent_gamma", "first": "Paul", "last": "Bamba", "phone": "0708091011", "status": "PENDING"},
-        {"username": "agent_delta", "first": "Awa", "last": "Diop", "phone": "0809101112", "status": "REJECTED"},
-        {"username": "agent_epsilon", "first": "Luc", "last": "Traore", "phone": "0910111213", "status": "APPROVED", "susp": True},
-    ]
-    
+    print("Creating 100 test agents...")
     agents = []
-    for data in agents_data:
-        user = User.objects.create_user(username=data["username"], password="password123")
+    statuses = ["APPROVED"] * 80 + ["PENDING"] * 10 + ["REJECTED"] * 5 + ["APPROVED"] * 5 # with 5 suspended
+    random.shuffle(statuses)
+    
+    first_names = ["Jean", "Marie", "Paul", "Awa", "Luc", "Fatou", "Kouakou", "Seydou", "Bintou", "Moussa"]
+    last_names = ["Dupont", "Kone", "Bamba", "Diop", "Traore", "Ouattara", "Toure", "Cisse", "Diallo", "Keita"]
+    
+    for i in range(100):
+        status = statuses[i]
+        is_suspended = (status == "APPROVED" and i >= 95)
+        user = User.objects.create_user(username=f"agent_{i+1}", password="password123")
         agent = Agent.objects.create(
-            user=user, first_name=data["first"], last_name=data["last"],
-            phone_number=data["phone"], kyc_status=data["status"],
-            is_suspended=data.get("susp", False)
+            user=user, 
+            first_name=random.choice(first_names), 
+            last_name=random.choice(last_names),
+            phone_number=f"0{random.randint(100000000, 999999999)}", 
+            kyc_status=status,
+            is_suspended=is_suspended
         )
         agents.append(agent)
     
@@ -49,16 +52,16 @@ def run_seeder():
                 )
                 puces.append(puce)
                 
-    print("Creating transactions...")
+    print("Creating 500 transactions...")
     types = ["DEPOT", "RETRAIT", "TRANSFERT", "SWAP"]
-    statuses = ["COMPLETED", "PENDING", "FAILED"]
+    statuses_list = ["COMPLETED", "PENDING", "FAILED"]
     
     now = timezone.now()
-    for _ in range(35):
+    for _ in range(500):
         agent = random.choice([a for a in agents if a.kyc_status == "APPROVED"])
         tx_type = random.choice(types)
         amount = Decimal(random.randint(10, 1000) * 100) # 1000 to 100000
-        status = random.choice(statuses)
+        status = random.choice(statuses_list)
         # 80% completed
         if random.random() < 0.8:
             status = "COMPLETED"

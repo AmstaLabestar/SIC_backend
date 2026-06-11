@@ -15,9 +15,12 @@
             </div>
         </div>
         {% if report %}
-        <a href="{% url 'dashboard:report_delete' report.id %}" onclick="return confirm('Êtes-vous sûr de vouloir supprimer ce rapport ?')" class="px-4 py-2.5 bg-rose-50 text-rose-600 rounded-xl text-sm font-semibold hover:bg-rose-100 transition-colors flex items-center gap-2">
-            <i data-lucide="trash-2" class="w-4 h-4"></i> Supprimer
-        </a>
+        <form method="POST" action="{% url 'dashboard:report_delete' report.id %}" class="inline" onsubmit="return confirm('Êtes-vous sûr de vouloir supprimer ce rapport ?')">
+            {% csrf_token %}
+            <button type="submit" class="px-4 py-2.5 bg-rose-50 text-rose-600 rounded-xl text-sm font-semibold hover:bg-rose-100 transition-colors flex items-center gap-2">
+                <i data-lucide="trash-2" class="w-4 h-4"></i> Supprimer
+            </button>
+        </form>
         {% endif %}
     </div>
 

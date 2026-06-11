@@ -128,20 +128,12 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # En développement local (sans Docker), utiliser SQLite ou PostgreSQL local
 # En production/Docker, utiliser la DATABASE_URL
 
+# Lire la variable DATABASE_URL si présente (peut être None)
+DATABASE_URL = get_env('DATABASE_URL', default=None)
 USE_DOCKER = get_bool('USE_DOCKER', default=False)
 
-if USE_DOCKER:
-    # Configuration Docker - utilise DATABASE_URL
-    DATABASE_URL = get_env('DATABASE_URL', required=True)
-    import dj_database_url
-    DATABASES = {
-        'default': dj_database_url.config(
-            default=DATABASE_URL,
-            conn_max_age=600,
-        )
-    }
-elif DATABASE_URL:
-    # PostgreSQL local (via DATABASE_URL)
+if USE_DOCKER or DATABASE_URL:
+    # Utiliser DATABASE_URL (Docker ou configuration explicite)
     import dj_database_url
     DATABASES = {
         'default': dj_database_url.config(
@@ -161,6 +153,13 @@ else:
             'PORT': get_env('POSTGRES_PORT', '5432'),
         }
     }
+
+# Environnement de production doit définir une SECRET_KEY
+if not DEBUG:
+    if not SECRET_KEY or SECRET_KEY == 'dev-secret-key-not-for-production':
+        raise RuntimeError(
+            "❌ SECRET_KEY is not set for production. Define SECRET_KEY in your .env"
+        )
 
 
 # Password validation
@@ -195,6 +194,11 @@ TIME_ZONE = 'Africa/Abidjan'  # Fuseau horaire de l'Afrique de l'Ouest (UTC+0)
 USE_I18N = True
 
 USE_TZ = True
+
+# Format des nombres (Séparateur de milliers)
+USE_THOUSAND_SEPARATOR = True
+THOUSAND_SEPARATOR = '.'
+NUMBER_GROUPING = 3
 
 
 # Static files (CSS, JavaScript, Images)
@@ -265,6 +269,7 @@ REST_FRAMEWORK = {
         'anon': '10/minute',
         'user': '60/minute',
         'login': '5/minute',       # Limite stricte sur l'authentification
+        'pin': '5/minute',         # Limite pour vérification PIN
         'register': '3/hour',      # Anti-bruteforce sur l'inscription
         'transaction': '30/minute' # Limite sur les transactions
     },
@@ -457,3 +462,9 @@ CINETPAY_CONFIG = {
     'NOTIFY_URL': get_env('CINETPAY_NOTIFY_URL', default='http://localhost:8000/api/transactions/webhook/'),
     'RETURN_URL': get_env('CINETPAY_RETURN_URL', default='http://localhost:8000/dashboard/'),
 }
+
+# Webhook secret (alternate env variable name)
+CINETPAY_WEBHOOK_SECRET = get_env('CINETPAY_WEBHOOK_SECRET', default='')
+
+# Allow legacy biometric signatures (MD5) - should be False in production
+ALLOW_LEGACY_BIOMETRIC = get_bool('ALLOW_LEGACY_BIOMETRIC', default=False)

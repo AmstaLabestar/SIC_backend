@@ -45,6 +45,11 @@ class TransactionRateThrottle(ScopedRateThrottle):
     scope = 'transaction'
 
 
+class PinRateThrottle(ScopedRateThrottle):
+    """Limite le nombre de tentatives PIN."""
+    scope = 'pin'
+
+
 class StandardResultsSetPagination(PageNumberPagination):
     page_size = 20
     page_size_query_param = 'page_size'
@@ -268,6 +273,22 @@ class TransactionViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, views
                 status=status.HTTP_403_FORBIDDEN
             )
 
+        # Si l'agent a configuré un PIN, exiger un pin_token valide
+        if agent.pin_code:
+            pin_token = request.data.get('pin_token') or request.headers.get('X-PIN-TOKEN')
+            if not pin_token:
+                return Response({'error': 'PIN verification required.'}, status=status.HTTP_401_UNAUTHORIZED)
+            from django.core import signing
+            from django.core.signing import BadSignature, SignatureExpired
+            try:
+                payload = signing.loads(pin_token, salt='pin-token', max_age=300)
+                if payload.get('agent_id') != str(agent.id):
+                    return Response({'error': 'Invalid PIN token.'}, status=status.HTTP_401_UNAUTHORIZED)
+            except SignatureExpired:
+                return Response({'error': 'PIN token expired.'}, status=status.HTTP_401_UNAUTHORIZED)
+            except BadSignature:
+                return Response({'error': 'Invalid PIN token.'}, status=status.HTTP_401_UNAUTHORIZED)
+
         try:
             tx = CompensationEngine.create_compensated_transaction(
                 agent=agent,
@@ -351,6 +372,22 @@ class TransactionViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, views
                 status=status.HTTP_403_FORBIDDEN
             )
 
+        # Si l'agent a configuré un PIN, exiger un pin_token valide
+        if agent.pin_code:
+            pin_token = request.data.get('pin_token') or request.headers.get('X-PIN-TOKEN')
+            if not pin_token:
+                return Response({'error': 'PIN verification required.'}, status=status.HTTP_401_UNAUTHORIZED)
+            from django.core import signing
+            from django.core.signing import BadSignature, SignatureExpired
+            try:
+                payload = signing.loads(pin_token, salt='pin-token', max_age=300)
+                if payload.get('agent_id') != str(agent.id):
+                    return Response({'error': 'Invalid PIN token.'}, status=status.HTTP_401_UNAUTHORIZED)
+            except SignatureExpired:
+                return Response({'error': 'PIN token expired.'}, status=status.HTTP_401_UNAUTHORIZED)
+            except BadSignature:
+                return Response({'error': 'Invalid PIN token.'}, status=status.HTTP_401_UNAUTHORIZED)
+
         try:
             tx = CompensationEngine.create_withdrawal_transaction(
                 agent=agent,
@@ -433,6 +470,22 @@ class TransactionViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, views
                 status=status.HTTP_403_FORBIDDEN
             )
 
+        # Si l'agent a configuré un PIN, exiger un pin_token valide
+        if agent.pin_code:
+            pin_token = request.data.get('pin_token') or request.headers.get('X-PIN-TOKEN')
+            if not pin_token:
+                return Response({'error': 'PIN verification required.'}, status=status.HTTP_401_UNAUTHORIZED)
+            from django.core import signing
+            from django.core.signing import BadSignature, SignatureExpired
+            try:
+                payload = signing.loads(pin_token, salt='pin-token', max_age=300)
+                if payload.get('agent_id') != str(agent.id):
+                    return Response({'error': 'Invalid PIN token.'}, status=status.HTTP_401_UNAUTHORIZED)
+            except SignatureExpired:
+                return Response({'error': 'PIN token expired.'}, status=status.HTTP_401_UNAUTHORIZED)
+            except BadSignature:
+                return Response({'error': 'Invalid PIN token.'}, status=status.HTTP_401_UNAUTHORIZED)
+
         try:
             source_puce = Puce.objects.get(
                 id=serializer.validated_data['source_puce_id'],
@@ -456,28 +509,9 @@ class TransactionViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, views
                 target_puce=target_puce
             )
 
-            # Simulation webhook pour développement
-            # En production, CinetPay appellera le webhook真实的
-            if settings.DEBUG:
-                # Simuler le succès immédiat
-                detail = tx.compensation_details.first()
-                if detail:
-                    detail.status = 'SUCCESS'
-                    detail.save()
-                    source_puce.balance -= tx.amount
-                    source_puce.save()
-                    target_puce.balance += tx.amount
-                    target_puce.save()
-                    tx.status = 'COMPLETED'
-                    tx.save()
-
-                    log_activity(
-                        agent=agent,
-                        action="TX_CONVERSION_COMPLETED",
-                        description=f"Conversion de {tx.amount} FCFA de {source_puce.operator} vers {target_puce.operator} complétée.",
-                        level="SUCCESS",
-                        ip_address=request.META.get('REMOTE_ADDR')
-                    )
+            # IMPORTANT: La transaction est créée avec le statut PENDING par le CompensationEngine.
+            # Le véritable statut final sera défini par le webhook CinetPay.
+            # En environnement de test/développement, vous devez appeler manuellement le webhook avec une signature valide.
 
             return Response({
                 'message': 'Conversion initiée',
@@ -526,7 +560,13 @@ class TransactionViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, views
 
         ref = request.data.get('cpm_trans_id') or request.data.get('cinetpay_ref')
         site_id = request.data.get('cpm_site_id', '')
-        secret_key = settings.CINETPAY_CONFIG.get('SECRET_KEY', '')
+        # Prefer explicit webhook secret name for clarity
+        secret_key = None
+        if isinstance(settings.CINETPAY_CONFIG, dict):
+            secret_key = settings.CINETPAY_CONFIG.get('SECRET_KEY')
+        # Backward compatibility: allow CINETPAY_WEBHOOK_SECRET env
+        if not secret_key:
+            secret_key = getattr(settings, 'CINETPAY_WEBHOOK_SECRET', None)
 
         if not ref:
             logger.warning("Webhook: Référence manquante")
@@ -534,26 +574,31 @@ class TransactionViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, views
                 {'error': 'Missing ref'},
                 status=status.HTTP_400_BAD_REQUEST
             )
+        # Vérification de la signature HMAC - Exiger la clé MÊME en développement pour éviter le contournement
+        if not secret_key:
+            logger.error("Webhook: secret key not configured for CinetPay webhooks")
+            return Response(
+                {'error': 'Webhook secret not configured'},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE
+            )
 
-        # Vérification de la signature HMAC
-        if secret_key:
-            expected_token = hmac.new(
-                secret_key.encode('utf-8'),
-                (site_id + str(ref)).encode('utf-8'),
-                hashlib.sha256
-            ).hexdigest()
+        expected_token = hmac.new(
+            secret_key.encode('utf-8'),
+            (site_id + str(ref)).encode('utf-8'),
+            hashlib.sha256
+        ).hexdigest()
 
-            if not hmac.compare_digest(x_token, expected_token):
-                logger.warning(f"Webhook: Signature invalide pour {ref}")
-                log_activity(
-                    action="WEBHOOK_INVALID_SIGNATURE",
-                    description=f"Tentative de webhook avec signature invalide: {ref[:20]}...",
-                    level="ERROR"
-                )
-                return Response(
-                    {'error': 'Invalid signature'},
-                    status=status.HTTP_403_FORBIDDEN
-                )
+        if not hmac.compare_digest(x_token, expected_token):
+            logger.warning(f"Webhook: Signature invalide pour {ref}")
+            log_activity(
+                action="WEBHOOK_INVALID_SIGNATURE",
+                description=f"Tentative de webhook avec signature invalide: {ref[:20]}...",
+                level="ERROR"
+            )
+            return Response(
+                {'error': 'Invalid signature'},
+                status=status.HTTP_403_FORBIDDEN
+            )
 
         # Traiter le webhook via le moteur de compensation
         payment_status = request.data.get('cpm_payment_status', '')
@@ -749,6 +794,8 @@ class PinVerifyView(generics.GenericAPIView):
     Retourne un token temporaire de validation (valide 5 min).
     """
     permission_classes = [IsAuthenticated]
+    throttle_classes = [PinRateThrottle]
+    throttle_scope = 'pin'
 
     def post(self, request):
         from .serializers import PinVerifySerializer
@@ -784,10 +831,13 @@ class PinVerifyView(generics.GenericAPIView):
             agent.save()
 
             # Générer un token de validation temporaire (5 min)
-            import hashlib
-            pin_token = hashlib.sha256(
-                f"{agent.id}:{int(time.time())}:{settings.SECRET_KEY}".encode()
-            ).hexdigest()[:32]
+            # Utiliser django signing pour émettre un token horodaté vérifiable côté serveur
+            from django.core import signing
+            payload = {
+                'agent_id': str(agent.id),
+            }
+            # Token signé (utiliser un salt spécifique)
+            pin_token = signing.dumps(payload, salt='pin-token')
 
             log_activity(
                 agent=agent,
@@ -949,8 +999,14 @@ class BiometricLoginView(generics.GenericAPIView):
         timestamp = serializer.validated_data['timestamp']
 
         # Anti-replay: le timestamp ne doit pas être trop vieux (5 min max)
+        # Accepte timestamp en secondes ou millisecondes (client peut envoyer les deux)
         current_time = int(time.time())
-        if abs(current_time - timestamp) > 300:
+        ts = int(timestamp)
+        # If timestamp looks like milliseconds, convert to seconds
+        if ts > 1_000_000_000_000:
+            ts = ts // 1000
+
+        if abs(current_time - ts) > 300:
             return Response(
                 {'error': 'Signature expirée. Veuillez réessayer.'},
                 status=status.HTTP_401_UNAUTHORIZED
@@ -983,13 +1039,84 @@ class BiometricLoginView(generics.GenericAPIView):
             )
 
         # Vérification de la signature
-        # En production: utiliser cryptography (RSA/ECDSA) pour vérifier avec la public_key
-        # En développement: vérification simplifiée HMAC
-        expected_signature = hashlib.sha256(
-            f"{device_id}:{timestamp}:{device.public_key}".encode()
-        ).hexdigest()
+        # Supporte deux formats de clé publique envoyés lors de l'enregistrement:
+        # 1) PEM (RSA/ECDSA) - chaîne commençant par '-----BEGIN'
+        # 2) clé publique raw encodée en base64 pour Ed25519 (migration recommandée)
+        import base64
+        message = f"{device_id}:{ts}".encode()
 
-        if not hmac.compare_digest(signature, expected_signature):
+        pub = (device.public_key or '').strip()
+        verified = False
+
+        # Try PEM (RSA/ECDSA) if provided
+        if pub.startswith('-----BEGIN'):
+            try:
+                from cryptography.hazmat.primitives import hashes
+                from cryptography.hazmat.primitives.asymmetric import padding
+                from cryptography.hazmat.primitives import serialization
+
+                public_key = serialization.load_pem_public_key(pub.encode())
+
+                # Signature may be hex or base64
+                sig_bytes = None
+                try:
+                    sig_bytes = bytes.fromhex(signature)
+                except Exception:
+                    try:
+                        sig_bytes = base64.b64decode(signature)
+                    except Exception:
+                        sig_bytes = signature.encode()
+
+                # Try RSA PKCS1v15 then generic verify
+                try:
+                    public_key.verify(
+                        sig_bytes,
+                        message,
+                        padding.PKCS1v15(),
+                        hashes.SHA256()
+                    )
+                    verified = True
+                except Exception:
+                    # Try generic verify (e.g., ECDSA)
+                    try:
+                        public_key.verify(sig_bytes, message, hashes.SHA256())
+                        verified = True
+                    except Exception:
+                        verified = False
+            except Exception as e:
+                logger.debug(f"PEM verify failed: {e}")
+
+        else:
+            # Assume base64-encoded Ed25519 public key
+            try:
+                pub_bytes = base64.b64decode(pub)
+                # Signature expected in base64
+                try:
+                    sig_bytes = base64.b64decode(signature)
+                except Exception:
+                    # fallback: hex
+                    sig_bytes = bytes.fromhex(signature)
+
+                from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+
+                Ed25519PublicKey.from_public_bytes(pub_bytes).verify(sig_bytes, message)
+                verified = True
+            except Exception as e:
+                logger.debug(f"Ed25519 verify failed: {e}")
+
+        if not verified:
+            # Allow legacy MD5/HMAC only if explicitly enabled via settings flag
+            allow_legacy = getattr(settings, 'ALLOW_LEGACY_BIOMETRIC', False)
+            if allow_legacy:
+                try:
+                    # legacy MD5 over device_id:timestamp:public_key
+                    expected_md5 = hashlib.md5(f"{device_id}:{timestamp}:{device.public_key}".encode()).hexdigest()
+                    if hmac.compare_digest(signature, expected_md5):
+                        verified = True
+                except Exception:
+                    pass
+
+        if not verified:
             log_activity(
                 agent=agent,
                 action="BIOMETRIC_LOGIN_INVALID",
@@ -997,10 +1124,7 @@ class BiometricLoginView(generics.GenericAPIView):
                 level="WARNING",
                 ip_address=request.META.get('REMOTE_ADDR')
             )
-            return Response(
-                {'error': 'Signature invalide.'},
-                status=status.HTTP_401_UNAUTHORIZED
-            )
+            return Response({'error': 'Signature invalide.'}, status=status.HTTP_401_UNAUTHORIZED)
 
         # Succès - Générer les tokens JWT
         from rest_framework_simplejwt.tokens import RefreshToken
