@@ -1,7 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/network/network_providers.dart';
 import '../../../../core/usecases/usecase.dart';
-import '../../data/datasources/dashboard_local_datasource.dart';
+import '../../data/datasources/dashboard_remote_datasource.dart';
 import '../../data/repositories/dashboard_repository_impl.dart';
 import '../../domain/entities/agent_summary.dart';
 import '../../domain/repositories/dashboard_repository.dart';
@@ -10,12 +11,12 @@ import '../../domain/usecases/refresh_balance.dart';
 
 enum DashboardBenefitPeriod { today, week, month }
 
-final dashboardLocalDatasourceProvider = Provider<DashboardLocalDatasource>(
-  (ref) => const DashboardLocalDatasource(),
+final dashboardRemoteDatasourceProvider = Provider<DashboardRemoteDatasource>(
+  (ref) => DashboardRemoteDatasource(ref.watch(dioProvider)),
 );
 
 final dashboardRepositoryProvider = Provider<DashboardRepository>((ref) {
-  return DashboardRepositoryImpl(ref.watch(dashboardLocalDatasourceProvider));
+  return DashboardRepositoryImpl(ref.watch(dashboardRemoteDatasourceProvider));
 });
 
 final getDashboardSummaryProvider = Provider<GetDashboardSummary>((ref) {

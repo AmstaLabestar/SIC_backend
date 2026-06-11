@@ -6,6 +6,7 @@ import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/constants/app_text_styles.dart';
 import '../../../../core/widgets/pressable.dart';
+import '../../../auth/presentation/providers/auth_provider.dart';
 import '../../../dashboard/presentation/providers/dashboard_provider.dart';
 
 /// Ecran "Mon compte" : profil de l'agent + acces parametres / securite /
@@ -49,7 +50,7 @@ class AccountScreen extends ConsumerWidget {
             title: 'Deconnexion',
             subtitle: 'Fermer la session',
             danger: true,
-            onTap: () => _confirmLogout(context),
+            onTap: () => _confirmLogout(context, ref),
           ),
           const SizedBox(height: AppSpacing.lg),
           Center(
@@ -65,7 +66,7 @@ class AccountScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _confirmLogout(BuildContext context) async {
+  Future<void> _confirmLogout(BuildContext context, WidgetRef ref) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -78,14 +79,16 @@ class AccountScreen extends ConsumerWidget {
           ),
           TextButton(
             onPressed: () => Navigator.of(context).pop(true),
+            style: TextButton.styleFrom(foregroundColor: AppColors.danger),
             child: const Text('Se deconnecter'),
           ),
         ],
       ),
     );
 
-    if (confirmed == true && context.mounted) {
-      _comingSoon(context, 'Deconnexion');
+    if (confirmed == true) {
+      // La garde de route renvoie automatiquement vers /login.
+      await ref.read(authControllerProvider.notifier).logout();
     }
   }
 
