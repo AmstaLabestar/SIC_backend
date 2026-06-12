@@ -93,6 +93,29 @@ class AuthController extends AsyncNotifier<AuthUser?> {
     return result.fold((failure) => failure.message, (_) => null);
   }
 
+  /// Configure le code PIN. Retourne un message d'erreur, ou `null` si succes.
+  /// En cas de succes, l'etat passe a `hasPin = true` (le JWT courant porte
+  /// encore `has_pin=false` mais sera rafraichi au prochain login).
+  Future<String?> setupPin({
+    required String password,
+    required String pin,
+    required String pinConfirm,
+  }) async {
+    final repo = ref.read(authRepositoryProvider);
+    final result = await repo.setupPin(
+      password: password,
+      pin: pin,
+      pinConfirm: pinConfirm,
+    );
+    return result.fold((failure) => failure.message, (_) {
+      final current = state.valueOrNull;
+      if (current != null) {
+        state = AsyncValue.data(current.copyWith(hasPin: true));
+      }
+      return null;
+    });
+  }
+
   Future<void> logout() async {
     final repo = ref.read(authRepositoryProvider);
     await repo.logout();

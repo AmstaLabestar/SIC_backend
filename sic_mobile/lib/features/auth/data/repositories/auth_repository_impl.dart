@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import '../../../../core/errors/failures.dart';
 import '../../../../core/network/dio_failure.dart';
 import '../../../../core/storage/token_storage.dart';
+import '../../../../core/utils/jwt_utils.dart';
 import '../../domain/entities/auth_user.dart';
 import '../../domain/repositories/auth_repository.dart';
 import '../datasources/auth_remote_datasource.dart';
@@ -26,7 +27,7 @@ class AuthRepositoryImpl implements AuthRepository {
         refresh: tokens.refresh,
       );
       final profile = await _datasource.getProfile();
-      return Right(profile);
+      return Right(profile.copyWith(hasPin: jwtHasPin(tokens.access)));
     } catch (error) {
       // Sur le login, un 401 signifie "identifiants incorrects",
       // pas "session expiree".
@@ -70,8 +71,34 @@ class AuthRepositoryImpl implements AuthRepository {
   @override
   Future<Either<Failure, AuthUser>> getProfile() async {
     try {
-      return Right(await _datasource.getProfile());
+      final profile = await _datasource.getProfile();
+      // `/auth/profile/` ne renvoie pas `has_pin` : on le lit dans le JWT.
+      final access = await _storage.readAccess();
+      return Right(profile.copyWith(hasPin: jwtHasPin(access)));
     } catch (error) {
+      return Left(mapDioErrorToFailure(error));
+    }
+  }
+
+  @override
+  Future<Either<Failure, Unit>> setupPin({
+    required String password,
+    required String pin,
+    required String pinConfirm,
+  }) async {
+    try {
+      await _datasource.setupPin(
+        password: password,
+        pin: pin,
+        pinConfirm: pinConfirm,
+      );
+      return const Right(unit);
+    } catch (error) {
+      // Le backend renvoie 403 "Mot de passe incorrect." : le mapping generique
+      // le masquerait en "Acces refuse", on le restitue ici.
+      if (error is DioException && error.response?.statusCode == 403) {
+        return const Left(ValidationFailure('Mot de passe incorrect.'));
+      }
       return Left(mapDioErrorToFailure(error));
     }
   }

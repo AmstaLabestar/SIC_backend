@@ -21,6 +21,13 @@ abstract class AuthRepository {
   /// Recupere le profil de l'agent connecte.
   Future<Either<Failure, AuthUser>> getProfile();
 
+  /// Definit le code PIN (exige le mot de passe du compte).
+  Future<Either<Failure, Unit>> setupPin({
+    required String password,
+    required String pin,
+    required String pinConfirm,
+  });
+
   /// Revoque la session (et purge toujours les tokens locaux).
   Future<Either<Failure, Unit>> logout();
 

@@ -62,4 +62,21 @@ class AuthRemoteDatasource {
       },
     );
   }
+
+  /// Definit le code PIN (`POST /auth/pin/setup/`).
+  /// Le mot de passe du compte est exige par le backend (403 si incorrect).
+  Future<void> setupPin({
+    required String password,
+    required String pin,
+    required String pinConfirm,
+  }) async {
+    await _dio.post<Map<String, dynamic>>(
+      ApiConstants.pinSetup,
+      data: {
+        'password': password,
+        'pin': pin,
+        'pin_confirm': pinConfirm,
+      },
+    );
+  }
 }

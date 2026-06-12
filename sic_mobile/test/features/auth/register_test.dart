@@ -41,6 +41,14 @@ class _FakeAuthRepository implements AuthRepository {
   Future<Either<Failure, Unit>> logout() async => const Right(unit);
 
   @override
+  Future<Either<Failure, Unit>> setupPin({
+    required String password,
+    required String pin,
+    required String pinConfirm,
+  }) async =>
+      const Right(unit);
+
+  @override
   Future<bool> hasSession() async => false;
 }
 
