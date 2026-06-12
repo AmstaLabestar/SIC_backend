@@ -31,7 +31,16 @@ class AuthInterceptor extends QueuedInterceptor {
     ApiConstants.health,
   };
 
+  /// Endpoints ou un 401 est metier (pas une session expiree) : il ne faut NI
+  /// rafraichir le token NI rejouer la requete. Sur `pin/verify`, un 401 signifie
+  /// "PIN incorrect" ; un retry doublerait le compteur de tentatives backend.
+  static const _businessAuthPaths = <String>{
+    ApiConstants.pinVerify,
+  };
+
   bool _isPublic(String path) => _publicPaths.any(path.contains);
+
+  bool _isBusinessAuth(String path) => _businessAuthPaths.any(path.contains);
 
   @override
   Future<void> onRequest(
@@ -56,7 +65,10 @@ class AuthInterceptor extends QueuedInterceptor {
     final isAuthError = response?.statusCode == 401;
     final alreadyRetried = err.requestOptions.extra['__retried__'] == true;
 
-    if (!isAuthError || alreadyRetried || _isPublic(err.requestOptions.path)) {
+    if (!isAuthError ||
+        alreadyRetried ||
+        _isPublic(err.requestOptions.path) ||
+        _isBusinessAuth(err.requestOptions.path)) {
       return handler.next(err);
     }
 

@@ -49,6 +49,10 @@ class _FakeAuthRepository implements AuthRepository {
       const Right(unit);
 
   @override
+  Future<Either<Failure, String>> verifyPin(String pin) async =>
+      const Right('pin-token');
+
+  @override
   Future<bool> hasSession() async => false;
 }
 

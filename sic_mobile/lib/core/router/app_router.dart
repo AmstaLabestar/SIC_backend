@@ -4,7 +4,9 @@ import 'package:go_router/go_router.dart';
 
 import '../../features/account/presentation/screens/account_screen.dart';
 import '../../features/alerts/presentation/screens/alerts_screen.dart';
+import '../../features/auth/presentation/providers/app_lock_provider.dart';
 import '../../features/auth/presentation/providers/auth_provider.dart';
+import '../../features/auth/presentation/screens/lock_screen.dart';
 import '../../features/auth/presentation/screens/login_screen.dart';
 import '../../features/auth/presentation/screens/pin_setup_screen.dart';
 import '../../features/auth/presentation/screens/register_screen.dart';
@@ -23,6 +25,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   final refresh = ValueNotifier<int>(0);
   ref.onDispose(refresh.dispose);
   ref.listen(authControllerProvider, (_, __) => refresh.value++);
+  // Le verrou app fait aussi partie de l'etat de navigation.
+  ref.listen(appLockProvider, (_, __) => refresh.value++);
 
   return GoRouter(
     initialLocation: '/splash',
@@ -51,8 +55,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       if (!user.hasPin) {
         return location == '/pin-setup' ? null : '/pin-setup';
       }
-      // PIN configure : les ecrans d'auth et de setup ne sont plus accessibles.
-      if (onAuthScreen || location == '/pin-setup') {
+      // Connecte + PIN configure mais app verrouillee -> ecran de deverrouillage
+      // (ouverture a froid ou retour d'arriere-plan).
+      final isUnlocked = ref.read(appLockProvider);
+      if (!isUnlocked) {
+        return location == '/lock' ? null : '/lock';
+      }
+      // App deverrouillee : les ecrans d'auth, de setup et de lock ne sont plus
+      // accessibles.
+      if (onAuthScreen || location == '/pin-setup' || location == '/lock') {
         return '/dashboard';
       }
       return null;
@@ -73,6 +84,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/pin-setup',
         builder: (context, state) => const PinSetupScreen(),
+      ),
+      GoRoute(
+        path: '/lock',
+        builder: (context, state) => const LockScreen(),
       ),
       GoRoute(
         path: '/operations/depot',

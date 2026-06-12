@@ -79,4 +79,15 @@ class AuthRemoteDatasource {
       },
     );
   }
+
+  /// Verifie le code PIN (`POST /auth/pin/verify/`) et retourne un jeton
+  /// temporaire (`pin_token`, valable ~5 min) a transmettre aux operations.
+  /// Leve une [DioException] : 401 PIN incorrect, 429 compte verrouille.
+  Future<String> verifyPin(String pin) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      ApiConstants.pinVerify,
+      data: {'pin': pin},
+    );
+    return response.data!['pin_token'] as String;
+  }
 }
