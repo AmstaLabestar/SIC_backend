@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_spacing.dart';
@@ -41,7 +42,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     HapticFeedback.selectionClick();
 
     final error = await ref.read(authControllerProvider.notifier).login(
-          _usernameController.text.trim(),
+          // Le backend stocke les identifiants en minuscules a l'inscription :
+          // on normalise au login pour eviter un faux "identifiants incorrects".
+          _usernameController.text.trim().toLowerCase(),
           _passwordController.text,
         );
 
@@ -135,6 +138,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   label: 'Se connecter',
                   isLoading: _submitting,
                   onPressed: _submit,
+                ),
+                const SizedBox(height: AppSpacing.md),
+                Center(
+                  child: TextButton(
+                    onPressed: () => context.go('/register'),
+                    child: Text(
+                      'Pas encore de compte ? Creer un compte',
+                      style: AppTextStyles.caption.copyWith(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
                 ),
               ],
             ),

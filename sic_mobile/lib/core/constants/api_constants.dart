@@ -24,6 +24,8 @@ class ApiConstants {
   static const refresh = '/auth/refresh/';
   static const logout = '/auth/logout/';
   static const profile = '/auth/profile/';
+  static const pinSetup = '/auth/pin/setup/';
+  static const pinVerify = '/auth/pin/verify/';
 
   // Ressources
   static const puces = '/puces/';

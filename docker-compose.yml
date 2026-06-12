@@ -60,6 +60,8 @@ services:
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
       - SECRET_KEY=change-this-in-production-use-secure-random-key
+      # Dev: inscription non throttlee pour faciliter les tests (prod=3/hour).
+      - REGISTER_THROTTLE_RATE=1000/hour
     depends_on:
       db:
         condition: service_healthy
@@ -84,6 +86,8 @@ services:
       - CELERY_BROKER_URL=redis://redis:6379/0
       - CELERY_RESULT_BACKEND=redis://redis:6379/0
       - SECRET_KEY=change-this-in-production-use-secure-random-key
+      # Dev: inscription non throttlee pour faciliter les tests (prod=3/hour).
+      - REGISTER_THROTTLE_RATE=1000/hour
     depends_on:
       db:
         condition: service_healthy

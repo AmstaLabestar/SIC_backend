@@ -1,0 +1,164 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../../core/constants/app_spacing.dart';
+import '../../../../core/constants/app_text_styles.dart';
+import '../../../../core/utils/validators.dart';
+import '../../../../core/widgets/sic_button.dart';
+import '../../../dashboard/presentation/providers/dashboard_provider.dart';
+import '../../../sim_management/presentation/providers/sim_provider.dart';
+import '../../../sim_management/presentation/widgets/operator_selector.dart';
+import '../../domain/entities/operation_result.dart';
+import '../providers/transaction_providers.dart';
+import '../widgets/operation_success_sheet.dart';
+
+/// Formulaire de depot ou de retrait (montant + operateur + numero cible).
+class MoneyOperationScreen extends ConsumerStatefulWidget {
+  const MoneyOperationScreen({super.key, required this.isDeposit});
+
+  final bool isDeposit;
+
+  String get _title => isDeposit ? 'Depot' : 'Retrait';
+
+  @override
+  ConsumerState<MoneyOperationScreen> createState() =>
+      _MoneyOperationScreenState();
+}
+
+class _MoneyOperationScreenState extends ConsumerState<MoneyOperationScreen> {
+  final _formKey = GlobalKey<FormState>();
+  final _amountController = TextEditingController();
+  final _phoneController = TextEditingController();
+  late String _operatorCode;
+  bool _isSubmitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final operators = ref.read(availableOperatorsProvider);
+    _operatorCode = operators.keys.isNotEmpty ? operators.keys.first : 'OM';
+  }
+
+  @override
+  void dispose() {
+    _amountController.dispose();
+    _phoneController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final operators = ref.watch(availableOperatorsProvider);
+
+    return Scaffold(
+      appBar: AppBar(title: Text(widget._title)),
+      body: SafeArea(
+        child: Form(
+          key: _formKey,
+          child: ListView(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            children: [
+              Text('Montant', style: AppTextStyles.microLabel),
+              const SizedBox(height: AppSpacing.sm),
+              TextFormField(
+                controller: _amountController,
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                decoration: const InputDecoration(
+                  hintText: '5000',
+                  suffixText: 'FCFA',
+                ),
+                validator: Validators.validateAmount,
+              ),
+              const SizedBox(height: AppSpacing.lg),
+
+              Text('Operateur du destinataire', style: AppTextStyles.microLabel),
+              const SizedBox(height: AppSpacing.sm),
+              OperatorSelector(
+                operators: operators,
+                selectedOperatorCode: _operatorCode,
+                onSelected: (code) => setState(() => _operatorCode = code),
+              ),
+              const SizedBox(height: AppSpacing.lg),
+
+              Text('Numero du destinataire', style: AppTextStyles.microLabel),
+              const SizedBox(height: AppSpacing.sm),
+              TextFormField(
+                controller: _phoneController,
+                keyboardType: TextInputType.phone,
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(10),
+                ],
+                decoration: const InputDecoration(hintText: '70123456'),
+                validator: (v) =>
+                    Validators.validateOperatorPhone(v, _operatorCode),
+              ),
+              const SizedBox(height: AppSpacing.xl),
+
+              SicButton(
+                label: 'Confirmer le ${widget._title.toLowerCase()}',
+                isLoading: _isSubmitting,
+                onPressed: _isSubmitting ? null : _submit,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _submit() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    final amount = double.parse(_amountController.text.trim());
+    final phone = _phoneController.text.trim();
+    final repo = ref.read(transactionRepositoryProvider);
+
+    setState(() => _isSubmitting = true);
+    final result = widget.isDeposit
+        ? await repo.deposit(
+            amount: amount,
+            operatorCode: _operatorCode,
+            phoneNumber: phone,
+          )
+        : await repo.withdraw(
+            amount: amount,
+            operatorCode: _operatorCode,
+            phoneNumber: phone,
+          );
+
+    if (!mounted) return;
+    setState(() => _isSubmitting = false);
+
+    await result.fold(
+      (failure) async {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(
+              behavior: SnackBarBehavior.floating,
+              content: Text(failure.message),
+            ),
+          );
+      },
+      (operation) => _onSuccess(operation),
+    );
+  }
+
+  Future<void> _onSuccess(OperationResult operation) async {
+    // Les soldes ont change cote serveur : on rafraichit dashboard + historique.
+    await ref.read(dashboardNotifierProvider.notifier).refresh();
+    await ref.read(transactionsNotifierProvider.notifier).refresh();
+
+    if (!mounted) return;
+    await OperationSuccessSheet.show(
+      context,
+      title: '${widget._title} initie',
+      result: operation,
+    );
+
+    if (mounted) Navigator.of(context).pop();
+  }
+}

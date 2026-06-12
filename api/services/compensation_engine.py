@@ -172,6 +172,22 @@ class TransactionValidator:
         return patterns
 
     @classmethod
+    def operator_for_number(cls, national):
+        """Devine l'opérateur à partir du numéro national (ou None).
+
+        Préfixes disjoints → au plus un opérateur possible.
+        Burkina = 8 chiffres, Côte d'Ivoire = 10 chiffres.
+        """
+        national = (national or '').strip()
+        for operator, prefixes in cls.BF_PREFIXES.items():
+            if len(national) == 8 and any(national.startswith(p) for p in prefixes):
+                return operator
+        for operator, prefixes in cls.CI_PREFIXES.items():
+            if len(national) == 10 and any(national.startswith(p) for p in prefixes):
+                return operator
+        return None
+
+    @classmethod
     def validate_phone_number(cls, phone_number, operator=None):
         """Valide le numéro pour l'opérateur (Burkina +226 / Côte d'Ivoire +225).
 

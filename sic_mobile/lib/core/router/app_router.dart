@@ -6,13 +6,16 @@ import '../../features/account/presentation/screens/account_screen.dart';
 import '../../features/alerts/presentation/screens/alerts_screen.dart';
 import '../../features/auth/presentation/providers/auth_provider.dart';
 import '../../features/auth/presentation/screens/login_screen.dart';
+import '../../features/auth/presentation/screens/pin_setup_screen.dart';
+import '../../features/auth/presentation/screens/register_screen.dart';
 import '../../features/auth/presentation/screens/splash_screen.dart';
 import '../../features/dashboard/presentation/screens/dashboard_screen.dart';
-import '../../features/operations/presentation/screens/operation_placeholder_screen.dart';
 import '../../features/settings/presentation/screens/settings_screen.dart';
 import '../../features/sim_management/presentation/screens/sim_management_screen.dart';
 import '../../features/stats/presentation/screens/stats_screen.dart';
+import '../../features/transactions/presentation/screens/money_operation_screen.dart';
 import '../../features/transactions/presentation/screens/transactions_screen.dart';
+import '../../features/transactions/presentation/screens/transfer_screen.dart';
 import 'app_shell.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
@@ -33,13 +36,23 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         return location == '/splash' ? null : '/splash';
       }
 
-      final isLoggedIn = auth.value != null;
-      final onAuthScreen = location == '/login' || location == '/splash';
+      final user = auth.value;
+      final isLoggedIn = user != null;
+      final onAuthScreen = location == '/login' ||
+          location == '/register' ||
+          location == '/splash';
 
       if (!isLoggedIn) {
-        return location == '/login' ? null : '/login';
+        return (location == '/login' || location == '/register')
+            ? null
+            : '/login';
       }
-      if (onAuthScreen) {
+      // Connecte mais sans code PIN -> creation obligatoire avant tout acces.
+      if (!user.hasPin) {
+        return location == '/pin-setup' ? null : '/pin-setup';
+      }
+      // PIN configure : les ecrans d'auth et de setup ne sont plus accessibles.
+      if (onAuthScreen || location == '/pin-setup') {
         return '/dashboard';
       }
       return null;
@@ -54,24 +67,26 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const LoginScreen(),
       ),
       GoRoute(
+        path: '/register',
+        builder: (context, state) => const RegisterScreen(),
+      ),
+      GoRoute(
+        path: '/pin-setup',
+        builder: (context, state) => const PinSetupScreen(),
+      ),
+      GoRoute(
         path: '/operations/depot',
         builder: (context, state) =>
-            const OperationPlaceholderScreen(label: 'Depot'),
+            const MoneyOperationScreen(isDeposit: true),
       ),
       GoRoute(
         path: '/operations/retrait',
         builder: (context, state) =>
-            const OperationPlaceholderScreen(label: 'Retrait'),
+            const MoneyOperationScreen(isDeposit: false),
       ),
       GoRoute(
         path: '/operations/transfert',
-        builder: (context, state) =>
-            const OperationPlaceholderScreen(label: 'Transfert'),
-      ),
-      GoRoute(
-        path: '/operations/recharge',
-        builder: (context, state) =>
-            const OperationPlaceholderScreen(label: 'Recharge'),
+        builder: (context, state) => const TransferScreen(),
       ),
       ShellRoute(
         builder: (context, state, child) => AppShell(child: child),

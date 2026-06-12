@@ -432,3 +432,74 @@ class DashboardViewsTest(TestCase):
         self.client.login(username='admin', password='Adminpass123!')
         response = self.client.get('/dashboard/')
         self.assertIn(response.status_code, [status.HTTP_200_OK, status.HTTP_302_FOUND])
+
+
+class RegisterSerializerTest(TestCase):
+    """Tests de l'inscription (au niveau serializer, sans throttle)."""
+
+    def _data(self, username, phone):
+        return {
+            'username': username,
+            'email': f'{username}@test.com',
+            'password': 'Passw0rd123',
+            'password_confirm': 'Passw0rd123',
+            'phone_number': phone,
+            'first_name': 'Test',
+            'last_name': 'Agent',
+        }
+
+    def test_register_cree_la_premiere_puce_depuis_le_numero(self):
+        from api.serializers import RegisterSerializer
+        s = RegisterSerializer(data=self._data('agentmoov', '70222444'))
+        self.assertTrue(s.is_valid(), s.errors)
+        user = s.save()
+        agent = user.agent_profile
+        self.assertEqual(agent.puces.count(), 1)
+        puce = agent.puces.first()
+        self.assertEqual(puce.operator, 'MOOV')  # 70xx -> Moov Burkina
+        self.assertEqual(puce.phone_number, '70222444')
+
+    def test_register_refuse_un_numero_deja_utilise(self):
+        from api.serializers import RegisterSerializer
+        first = RegisterSerializer(data=self._data('agentone', '07222444'))
+        self.assertTrue(first.is_valid(), first.errors)
+        first.save()
+
+        dup = RegisterSerializer(data=self._data('agenttwo', '07222444'))
+        self.assertFalse(dup.is_valid())
+        self.assertIn('phone_number', dup.errors)
+
+
+class PuceGlobalUniquenessTest(APITestCase):
+    """Un numéro de puce ne peut appartenir qu'à un seul agent (fintech)."""
+
+    def setUp(self):
+        self.ua = User.objects.create_user('agalpha', 'a@a.com', 'Passw0rd123')
+        self.aa = Agent.objects.create(
+            user=self.ua, phone_number='70901001',
+            first_name='A', last_name='A', kyc_status='APPROVED',
+        )
+        Puce.objects.create(agent=self.aa, operator='MOOV',
+                            phone_number='70901001', balance=Decimal('0'))
+
+        self.ub = User.objects.create_user('agbeta', 'b@b.com', 'Passw0rd123')
+        self.ab = Agent.objects.create(
+            user=self.ub, phone_number='67901002',
+            first_name='B', last_name='B', kyc_status='APPROVED',
+        )
+        Puce.objects.create(agent=self.ab, operator='ORANGE',
+                            phone_number='67901002', balance=Decimal('0'))
+
+        refresh = RefreshToken.for_user(self.ua)
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {refresh.access_token}')
+
+    def test_refuse_un_numero_appartenant_a_un_autre_agent(self):
+        resp = self.client.post('/api/puces/',
+                                {'operator': 'ORANGE', 'phone_number': '67901002'})
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('phone_number', resp.data)
+
+    def test_accepte_un_numero_neuf(self):
+        resp = self.client.post('/api/puces/',
+                                {'operator': 'TELECEL', 'phone_number': '78901003'})
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)

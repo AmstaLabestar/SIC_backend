@@ -110,12 +110,6 @@ class _DashboardContent extends ConsumerWidget {
                   color: const Color(0xFF534AB7),
                   onTap: () => context.push('/operations/transfert'),
                 ),
-                Operation(
-                  icon: Icons.phone_android_rounded,
-                  label: 'Recharge',
-                  color: AppColors.secondary,
-                  onTap: () => context.push('/operations/recharge'),
-                ),
               ],
             ),
           ).animate().fadeIn(delay: 150.ms, duration: 400.ms).slideY(
