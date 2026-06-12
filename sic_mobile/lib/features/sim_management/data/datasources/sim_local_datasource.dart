@@ -37,13 +37,15 @@ class SimLocalDatasource {
     ),
   ];
 
+  /// Operateurs acceptes par le backend (`TransactionValidator.VALID_OPERATORS`
+  /// = ORANGE, MOOV, TELECEL, MTN). Le code mobile `OM` est traduit en
+  /// `ORANGE` via [OperatorMapping].
+  /// Burkina Faso : Orange, Moov, Telecel. Cote d'Ivoire : Orange, MTN, Moov.
   static const Map<String, String> availableOperators = {
     'OM': 'Orange Money',
     'MOOV': 'Moov Money',
     'TELECEL': 'Telecel Money',
     'MTN': 'MTN Money',
-    'WAVE': 'Wave',
-    'CORIS': 'Coris Money',
   };
 
   Future<List<SimCardModel>> getSims() async {

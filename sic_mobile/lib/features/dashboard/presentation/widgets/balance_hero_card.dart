@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/constants/app_gradients.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/constants/app_text_styles.dart';
 import '../../../../core/utils/fcfa_formatter.dart';
@@ -35,16 +36,7 @@ class BalanceHeroCard extends StatelessWidget {
       padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            AppColors.primary,
-            AppColors.primaryLight,
-            AppColors.secondary,
-          ],
-          stops: [0.0, 0.55, 1.0],
-        ),
+        gradient: AppGradients.hero,
         boxShadow: [
           BoxShadow(
             color: AppColors.primary.withValues(alpha: 0.25),

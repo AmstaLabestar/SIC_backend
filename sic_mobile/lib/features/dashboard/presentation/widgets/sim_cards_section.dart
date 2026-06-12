@@ -44,14 +44,15 @@ class SimCardsSection extends StatelessWidget {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    const Icon(Icons.add_rounded, size: 16),
+                    const SizedBox(width: 2),
                     Text(
-                      'Gerer',
+                      'Ajouter',
                       style: AppTextStyles.caption.copyWith(
                         color: AppColors.primaryLight,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-                    const Icon(Icons.chevron_right, size: 16),
                   ],
                 ),
               ),

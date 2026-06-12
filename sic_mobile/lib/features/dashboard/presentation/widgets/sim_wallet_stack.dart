@@ -11,6 +11,12 @@ import '../../../../core/utils/fcfa_formatter.dart';
 import '../../domain/entities/balance_summary.dart';
 import '../providers/dashboard_provider.dart';
 
+/// Identite stable d'une SIM (cle de widget + etat de visibilite).
+/// Deux puces du meme operateur restent distinctes grace a l'id backend
+/// (fallback : operateur + numero).
+String simIdentity(BalanceSummary b) =>
+    b.id ?? '${b.operatorCode}_${b.phoneNumber}';
+
 /// Pile de cartes SIM facon Apple Wallet : une carte depliee en haut, les
 /// autres repliees en dessous. Un tap sur une carte repliee la fait remonter.
 class SimWalletStack extends ConsumerStatefulWidget {
@@ -69,7 +75,7 @@ class _SimWalletStackState extends ConsumerState<SimWalletStack> {
       final index = collapsed[j];
       children.add(
         AnimatedPositioned(
-          key: ValueKey('sim_${balances[index].operatorCode}'),
+          key: ValueKey('sim_${simIdentity(balances[index])}'),
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeOutCubic,
           left: 0,
@@ -86,7 +92,7 @@ class _SimWalletStackState extends ConsumerState<SimWalletStack> {
     // Carte depliee, dessinee en dernier (au-dessus).
     children.add(
       AnimatedPositioned(
-        key: ValueKey('sim_${balances[_selected].operatorCode}'),
+        key: ValueKey('sim_${simIdentity(balances[_selected])}'),
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeOutCubic,
         left: 0,
@@ -104,7 +110,7 @@ class _SimWalletStackState extends ConsumerState<SimWalletStack> {
   }
 
   Widget _expandedCard(BalanceSummary balance) {
-    final isVisible = ref.watch(simVisibilityProvider(balance.operatorCode));
+    final isVisible = ref.watch(simVisibilityProvider(simIdentity(balance)));
     final gradient = _operatorGradient(balance.operatorCode);
     final status = _statusOf(balance);
 
@@ -165,7 +171,7 @@ class _SimWalletStackState extends ConsumerState<SimWalletStack> {
                         onTap: () {
                           HapticFeedback.lightImpact();
                           ref
-                              .read(simVisibilityProvider(balance.operatorCode)
+                              .read(simVisibilityProvider(simIdentity(balance))
                                   .notifier)
                               .update((v) => !v);
                         },

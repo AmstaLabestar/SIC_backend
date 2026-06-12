@@ -3,6 +3,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
+import 'core/app_globals.dart';
 import 'core/constants/app_theme.dart';
 import 'core/router/app_router.dart';
 
@@ -24,6 +25,7 @@ class SicMobileApp extends ConsumerWidget {
     return MaterialApp.router(
       title: 'SIC Mobile',
       debugShowCheckedModeBanner: false,
+      scaffoldMessengerKey: scaffoldMessengerKey,
       theme: AppTheme.lightTheme,
       routerConfig: router,
     );

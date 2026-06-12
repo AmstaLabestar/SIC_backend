@@ -155,7 +155,7 @@ class RegisterSerializer(serializers.ModelSerializer):
     phone_number = serializers.CharField(
         required=True,
         max_length=20,
-        help_text='Numéro de téléphone (ex: +224621234567)'
+        help_text='Numéro (Burkina +226, 8 chiffres ; ex: 70123456)'
     )
     first_name = serializers.CharField(required=False, max_length=100, allow_blank=True)
     last_name = serializers.CharField(required=False, max_length=100, allow_blank=True)
@@ -203,25 +203,20 @@ class RegisterSerializer(serializers.ModelSerializer):
         return value
 
     def validate_phone_number(self, value):
-        """Valider le format du numéro de téléphone."""
-        import re
+        """Valider le numéro (Burkina Faso +226 / Côte d'Ivoire +225)."""
+        from api.services.compensation_engine import TransactionValidator
 
-        # Nettoyer le numéro
-        phone = value.strip().replace(' ', '').replace('-', '')
+        # Pas d'opérateur à l'inscription : on accepte tout opérateur valide.
+        try:
+            national = TransactionValidator.validate_phone_number(value)
+        except ValueError as e:
+            raise serializers.ValidationError(str(e))
 
-        # Vérifier si déjà utilisé
-        if Agent.objects.filter(phone_number=phone).exists():
+        # Vérifier si déjà utilisé (sur le numéro normalisé)
+        if Agent.objects.filter(phone_number=national).exists():
             raise serializers.ValidationError("Ce numéro de téléphone est déjà utilisé.")
 
-        # Pattern pour numéros Ouest-Africains ( indicatif +224, +226, +228, +229)
-        pattern = r'^(\+224|\+226|\+228|\+229)?[0-9]{8,9}$'
-
-        if not re.match(pattern, phone):
-            raise serializers.ValidationError(
-                "Format de numéro invalide. Utilisez le format international (ex: +224621234567)"
-            )
-
-        return phone
+        return national
 
     def create(self, validated_data):
         """Créer l'utilisateur et le profil agent."""
@@ -272,7 +267,7 @@ class DepositSerializer(serializers.Serializer):
     target_operator = serializers.CharField(
         max_length=50,
         required=True,
-        help_text='Opérateur: ORANGE, MOOV, TELECEL, CORIS'
+        help_text='Opérateur: ORANGE, MOOV, TELECEL, MTN'
     )
     target_phone_number = serializers.CharField(
         max_length=50,
@@ -298,31 +293,31 @@ class DepositSerializer(serializers.Serializer):
 
     def validate_target_operator(self, value):
         """Valider l'opérateur."""
-        valid_operators = ['ORANGE', 'MOOV', 'TELECEL', 'CORIS']
+        from api.services.compensation_engine import TransactionValidator
         operator = value.upper().strip()
-
-        if operator not in valid_operators:
+        if operator not in TransactionValidator.VALID_OPERATORS:
             raise serializers.ValidationError(
-                f"Opérateur invalide. Options: {', '.join(valid_operators)}"
+                f"Opérateur invalide. Options: {', '.join(TransactionValidator.VALID_OPERATORS)}"
             )
-
         return operator
 
     def validate_target_phone_number(self, value):
-        """Valider le numéro de téléphone."""
-        import re
+        """Nettoyage simple ; la validation par opérateur se fait dans validate()."""
+        return value.strip().replace(' ', '').replace('-', '')
 
-        phone = value.strip().replace(' ', '').replace('-', '')
-
-        # Pattern simple pour numéros Ouest-Africains
-        pattern = r'^(\+224|\+226|\+228|\+229)?[0-9]{8,9}$'
-
-        if not re.match(pattern, phone):
-            raise serializers.ValidationError(
-                "Format de numéro invalide (ex: +224621234567)"
-            )
-
-        return phone
+    def validate(self, attrs):
+        """Validation croisée numéro <-> opérateur (Burkina +226 / Côte d'Ivoire +225)."""
+        from api.services.compensation_engine import TransactionValidator
+        operator = attrs.get('target_operator')
+        phone = attrs.get('target_phone_number')
+        if operator and phone:
+            try:
+                attrs['target_phone_number'] = TransactionValidator.validate_phone_number(
+                    phone, operator
+                )
+            except ValueError as e:
+                raise serializers.ValidationError({'target_phone_number': str(e)})
+        return attrs
 
 
 class WithdrawSerializer(serializers.Serializer):
@@ -342,7 +337,7 @@ class WithdrawSerializer(serializers.Serializer):
     target_operator = serializers.CharField(
         max_length=50,
         required=True,
-        help_text='Opérateur: ORANGE, MOOV, TELECEL, CORIS'
+        help_text='Opérateur: ORANGE, MOOV, TELECEL, MTN'
     )
     target_phone_number = serializers.CharField(
         max_length=50,
@@ -359,19 +354,29 @@ class WithdrawSerializer(serializers.Serializer):
         return value
 
     def validate_target_operator(self, value):
-        valid_operators = ['ORANGE', 'MOOV', 'TELECEL', 'CORIS']
+        from api.services.compensation_engine import TransactionValidator
         operator = value.upper().strip()
-        if operator not in valid_operators:
-            raise serializers.ValidationError(f"Opérateur invalide. Options: {', '.join(valid_operators)}")
+        if operator not in TransactionValidator.VALID_OPERATORS:
+            raise serializers.ValidationError(
+                f"Opérateur invalide. Options: {', '.join(TransactionValidator.VALID_OPERATORS)}"
+            )
         return operator
 
     def validate_target_phone_number(self, value):
-        import re
-        phone = value.strip().replace(' ', '').replace('-', '')
-        pattern = r'^(\+224|\+226|\+228|\+229)?[0-9]{8,9}$'
-        if not re.match(pattern, phone):
-            raise serializers.ValidationError("Format de numéro invalide")
-        return phone
+        return value.strip().replace(' ', '').replace('-', '')
+
+    def validate(self, attrs):
+        from api.services.compensation_engine import TransactionValidator
+        operator = attrs.get('target_operator')
+        phone = attrs.get('target_phone_number')
+        if operator and phone:
+            try:
+                attrs['target_phone_number'] = TransactionValidator.validate_phone_number(
+                    phone, operator
+                )
+            except ValueError as e:
+                raise serializers.ValidationError({'target_phone_number': str(e)})
+        return attrs
 
 
 class ConversionSerializer(serializers.Serializer):
@@ -464,6 +469,40 @@ class PuceSerializer(serializers.ModelSerializer):
         model = Puce
         fields = ['id', 'operator', 'phone_number',
                   'balance', 'is_active', 'created_at', 'updated_at']
+        # Le solde n'est jamais modifiable par l'agent (géré côté admin / topup).
+        read_only_fields = ['balance']
+
+    def validate(self, attrs):
+        """Valider l'opérateur et le numéro (Burkina +226 / Côte d'Ivoire +225).
+
+        Gère aussi la mise à jour partielle (PATCH) en retombant sur l'instance.
+        """
+        from api.services.compensation_engine import TransactionValidator
+
+        operator = (attrs.get('operator')
+                    or getattr(self.instance, 'operator', '') or '').upper()
+        phone = (attrs.get('phone_number')
+                 or getattr(self.instance, 'phone_number', ''))
+
+        if operator and operator not in TransactionValidator.VALID_OPERATORS:
+            raise serializers.ValidationError({
+                'operator': f"Opérateur invalide. "
+                            f"Options: {', '.join(TransactionValidator.VALID_OPERATORS)}"
+            })
+
+        if phone:
+            try:
+                national = TransactionValidator.validate_phone_number(
+                    phone, operator or None
+                )
+            except ValueError as e:
+                raise serializers.ValidationError({'phone_number': str(e)})
+            attrs['phone_number'] = national
+
+        if 'operator' in attrs:
+            attrs['operator'] = operator
+
+        return attrs
 
 
 class AgentSerializer(serializers.ModelSerializer):

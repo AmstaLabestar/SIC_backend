@@ -111,6 +111,7 @@ class _AlertConfigTileState extends ConsumerState<AlertConfigTile> {
     setState(() => _draftConfig = config);
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 500), () {
+      if (!mounted) return;
       ref.read(alertNotifierProvider.notifier).save(_draftConfig);
     });
   }

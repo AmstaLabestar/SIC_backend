@@ -10,10 +10,12 @@ class BalanceSummaryModel extends BalanceSummary {
     required super.alertThreshold,
     required super.lastUpdated,
     super.isActive,
+    super.id,
   });
 
   factory BalanceSummaryModel.fromJson(Map<String, dynamic> json) {
     return BalanceSummaryModel(
+      id: json['id'] as String?,
       operatorCode: json['operator_code'] as String,
       operatorName: json['operator_name'] as String,
       phoneNumber: json['phone_number'] as String,
@@ -70,6 +72,7 @@ class BalanceSummaryModel extends BalanceSummary {
 
   Map<String, dynamic> toJson() {
     return {
+      'id': id,
       'operator_code': operatorCode,
       'operator_name': operatorName,
       'phone_number': phoneNumber,

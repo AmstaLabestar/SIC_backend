@@ -13,6 +13,7 @@ import '../../../../core/widgets/sic_loading.dart';
 import '../../../balance_update/presentation/widgets/balance_update_bottom_sheet.dart';
 import '../../domain/entities/agent_summary.dart';
 import '../providers/dashboard_provider.dart';
+import '../widgets/add_sim_sheet.dart';
 import '../widgets/balance_hero_card.dart';
 import '../widgets/modify_sim_sheet.dart';
 import '../widgets/operations_bar.dart';
@@ -95,25 +96,25 @@ class _DashboardContent extends ConsumerWidget {
                   icon: Icons.arrow_downward_rounded,
                   label: 'Depot',
                   color: AppColors.secondary,
-                  onTap: () => _comingSoon(context, 'Depot'),
+                  onTap: () => context.push('/operations/depot'),
                 ),
                 Operation(
                   icon: Icons.arrow_upward_rounded,
                   label: 'Retrait',
                   color: AppColors.primaryLight,
-                  onTap: () => _comingSoon(context, 'Retrait'),
+                  onTap: () => context.push('/operations/retrait'),
                 ),
                 Operation(
                   icon: Icons.swap_horiz_rounded,
                   label: 'Transfert',
                   color: const Color(0xFF534AB7),
-                  onTap: () => _comingSoon(context, 'Transfert'),
+                  onTap: () => context.push('/operations/transfert'),
                 ),
                 Operation(
                   icon: Icons.phone_android_rounded,
                   label: 'Recharge',
                   color: AppColors.secondary,
-                  onTap: () => _comingSoon(context, 'Recharge'),
+                  onTap: () => context.push('/operations/recharge'),
                 ),
               ],
             ),
@@ -127,7 +128,7 @@ class _DashboardContent extends ConsumerWidget {
             padding: const EdgeInsets.only(top: 16, bottom: 8),
             child: SimCardsSection(
               balances: summary.balances,
-              onManageTap: () => context.go('/dashboard/sims'),
+              onManageTap: () => AddSimSheet.show(context),
               onCardTap: (balance) =>
                   BalanceUpdateBottomSheet.show(context, balance),
               onHistoryTap: (balance) =>

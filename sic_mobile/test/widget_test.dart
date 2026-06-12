@@ -1,22 +1,60 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sic_mobile/core/network/network_providers.dart';
+import 'package:sic_mobile/core/storage/token_storage.dart';
 import 'package:sic_mobile/main.dart';
 
+/// Stockage en memoire pour eviter le plugin natif (channels) en test.
+class _FakeTokenStorage extends TokenStorage {
+  _FakeTokenStorage() : super(_noopStorage);
+  static const _noopStorage = FlutterSecureStorage();
+
+  String? _access;
+  String? _refresh;
+
+  @override
+  Future<bool> hasSession() async => _refresh != null;
+
+  @override
+  Future<String?> readAccess() async => _access;
+
+  @override
+  Future<String?> readRefresh() async => _refresh;
+
+  @override
+  Future<void> saveTokens({required String access, required String refresh}) async {
+    _access = access;
+    _refresh = refresh;
+  }
+
+  @override
+  Future<void> saveAccess(String access) async => _access = access;
+
+  @override
+  Future<void> clear() async {
+    _access = null;
+    _refresh = null;
+  }
+}
+
 void main() {
-  testWidgets('should render dashboard with mocked summary', (tester) async {
-    await tester.pumpWidget(const ProviderScope(child: SicMobileApp()));
+  testWidgets('should route to login when no session', (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          tokenStorageProvider.overrideWithValue(_FakeTokenStorage()),
+        ],
+        child: const SicMobileApp(),
+      ),
+    );
 
-    // Laisse le datasource mocke repondre (~800ms) puis joue les animations
-    // d'entree. On evite pumpAndSettle : la banniere a un auto-scroll en boucle
-    // qui ne se stabilise jamais.
-    await tester.pump(const Duration(milliseconds: 900));
-    await tester.pump(const Duration(milliseconds: 600));
+    // Splash -> verification de session (pas de token) -> redirection login.
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pump(const Duration(milliseconds: 100));
 
-    expect(find.text('Kone Moussa'), findsOneWidget);
-    expect(find.textContaining('Solde total'), findsOneWidget);
-    expect(find.text('Mes SIM'), findsOneWidget);
-    expect(find.text('Operations'), findsOneWidget);
-    expect(find.byType(TextButton), findsWidgets);
+    expect(find.text('Se connecter'), findsOneWidget);
+    expect(find.text('Bienvenue'), findsOneWidget);
   });
 }

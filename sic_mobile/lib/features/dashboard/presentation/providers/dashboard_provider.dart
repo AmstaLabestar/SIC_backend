@@ -1,7 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/network/network_providers.dart';
 import '../../../../core/usecases/usecase.dart';
-import '../../data/datasources/dashboard_local_datasource.dart';
+import '../../data/datasources/dashboard_remote_datasource.dart';
 import '../../data/repositories/dashboard_repository_impl.dart';
 import '../../domain/entities/agent_summary.dart';
 import '../../domain/repositories/dashboard_repository.dart';
@@ -10,12 +11,12 @@ import '../../domain/usecases/refresh_balance.dart';
 
 enum DashboardBenefitPeriod { today, week, month }
 
-final dashboardLocalDatasourceProvider = Provider<DashboardLocalDatasource>(
-  (ref) => const DashboardLocalDatasource(),
+final dashboardRemoteDatasourceProvider = Provider<DashboardRemoteDatasource>(
+  (ref) => DashboardRemoteDatasource(ref.watch(dioProvider)),
 );
 
 final dashboardRepositoryProvider = Provider<DashboardRepository>((ref) {
-  return DashboardRepositoryImpl(ref.watch(dashboardLocalDatasourceProvider));
+  return DashboardRepositoryImpl(ref.watch(dashboardRemoteDatasourceProvider));
 });
 
 final getDashboardSummaryProvider = Provider<GetDashboardSummary>((ref) {
@@ -53,7 +54,8 @@ class DashboardNotifier extends AsyncNotifier<AgentSummary> {
   }
 
   Future<void> refresh() async {
-    state = const AsyncLoading<AgentSummary>();
+    // Pas de flash blanc : on garde l'etat precedent visible pendant le reload
+    // (le RefreshIndicator fournit deja un retour visuel).
     state = await AsyncValue.guard(_loadDashboard);
   }
 
@@ -93,43 +95,62 @@ class DashboardNotifier extends AsyncNotifier<AgentSummary> {
     state = AsyncData(currentSummary.copyWith(balances: updatedBalances));
   }
 
-  /// Met a jour les infos d'une SIM (operateur, numero, statut actif).
-  void updateSim({
-    required String originalOperatorCode,
+  /// Modifie une SIM cote backend (`PATCH /puces/{id}/`) puis rafraichit le
+  /// dashboard (source de verite). Retourne un message d'erreur ou `null`.
+  Future<String?> updateSim({
+    required String id,
     required String operatorCode,
-    required String operatorName,
     required String phoneNumber,
     required bool isActive,
-  }) {
-    final current = state.valueOrNull;
-    if (current == null) return;
-
-    final updated = current.balances.map((balance) {
-      if (balance.operatorCode != originalOperatorCode) {
-        return balance;
-      }
-      return balance.copyWith(
-        operatorCode: operatorCode,
-        operatorName: operatorName,
-        phoneNumber: phoneNumber,
-        isActive: isActive,
-        lastUpdated: DateTime.now(),
-      );
-    }).toList();
-
-    state = AsyncData(current.copyWith(balances: updated));
+  }) async {
+    final repo = ref.read(dashboardRepositoryProvider);
+    final result = await repo.updatePuce(
+      id: id,
+      operatorCode: operatorCode,
+      phoneNumber: phoneNumber,
+      isActive: isActive,
+    );
+    return result.fold(
+      (failure) async => failure.message,
+      (_) async {
+        await refresh();
+        return null;
+      },
+    );
   }
 
-  /// Supprime une SIM de la liste (recalcule le solde total).
-  void removeSim(String operatorCode) {
-    final current = state.valueOrNull;
-    if (current == null) return;
+  /// Supprime une SIM cote backend (`DELETE /puces/{id}/`) puis rafraichit.
+  /// Retourne un message d'erreur ou `null`.
+  Future<String?> removeSim(String id) async {
+    final repo = ref.read(dashboardRepositoryProvider);
+    final result = await repo.deletePuce(id);
+    return result.fold(
+      (failure) async => failure.message,
+      (_) async {
+        await refresh();
+        return null;
+      },
+    );
+  }
 
-    final updated = current.balances
-        .where((balance) => balance.operatorCode != operatorCode)
-        .toList();
-
-    state = AsyncData(current.copyWith(balances: updated));
+  /// Ajoute une SIM cote backend (`POST /puces/`) puis rafraichit.
+  /// Retourne un message d'erreur ou `null`.
+  Future<String?> addSim({
+    required String operatorCode,
+    required String phoneNumber,
+  }) async {
+    final repo = ref.read(dashboardRepositoryProvider);
+    final result = await repo.createPuce(
+      operatorCode: operatorCode,
+      phoneNumber: phoneNumber,
+    );
+    return result.fold(
+      (failure) async => failure.message,
+      (_) async {
+        await refresh();
+        return null;
+      },
+    );
   }
 
   Future<AgentSummary> _loadDashboard() async {

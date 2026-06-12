@@ -9,11 +9,16 @@ import 'app_colors.dart';
 class AppGradients {
   const AppGradients._();
 
-  /// Gradient principal de la carte solde.
+  /// Gradient principal de la carte solde (bleu -> bleu -> emeraude, 145deg).
   static const LinearGradient hero = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
-    colors: [AppColors.gradientStart, AppColors.gradientEnd],
+    colors: [
+      AppColors.gradientStart,
+      AppColors.gradientMid,
+      AppColors.gradientEnd,
+    ],
+    stops: [0.0, 0.55, 1.0],
   );
 
   /// Teinte douce d'une couleur (fond d'icone d'action rapide).
