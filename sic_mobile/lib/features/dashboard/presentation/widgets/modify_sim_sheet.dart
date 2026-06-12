@@ -36,6 +36,8 @@ class _ModifySimSheetState extends ConsumerState<ModifySimSheet> {
   late final TextEditingController _phoneController;
   late String _operatorCode;
   late bool _isActive;
+  bool _isSubmitting = false;
+  bool _isDeleting = false;
 
   @override
   void initState() {
@@ -121,20 +123,31 @@ class _ModifySimSheetState extends ConsumerState<ModifySimSheet> {
                   FilteringTextInputFormatter.digitsOnly,
                   LengthLimitingTextInputFormatter(10),
                 ],
-                decoration: const InputDecoration(hintText: '0701234567'),
-                validator: Validators.validatePhone,
+                decoration: const InputDecoration(hintText: '70123456'),
+                validator: (v) =>
+                    Validators.validateOperatorPhone(v, _operatorCode),
               ),
               const SizedBox(height: AppSpacing.xl),
 
-              SicButton(label: 'Mettre a jour la SIM', onPressed: _submit),
+              SicButton(
+                label: 'Mettre a jour la SIM',
+                isLoading: _isSubmitting,
+                onPressed: (_isSubmitting || _isDeleting) ? null : _submit,
+              ),
               const SizedBox(height: AppSpacing.sm),
               TextButton.icon(
-                onPressed: _confirmDelete,
+                onPressed: (_isSubmitting || _isDeleting) ? null : _confirmDelete,
                 style: TextButton.styleFrom(
                   foregroundColor: AppColors.danger,
                   minimumSize: const Size.fromHeight(48),
                 ),
-                icon: const Icon(Icons.delete_outline_rounded, size: 20),
+                icon: _isDeleting
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.delete_outline_rounded, size: 20),
                 label: const Text('Supprimer la carte SIM'),
               ),
             ],
@@ -144,27 +157,33 @@ class _ModifySimSheetState extends ConsumerState<ModifySimSheet> {
     );
   }
 
-  void _submit() {
+  Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final operators = ref.read(availableOperatorsProvider);
-    ref.read(dashboardNotifierProvider.notifier).updateSim(
-          originalOperatorCode: widget.balance.operatorCode,
+    final id = widget.balance.id;
+    if (id == null) {
+      _showSnack('SIM introuvable (identifiant manquant).');
+      return;
+    }
+
+    setState(() => _isSubmitting = true);
+    final error = await ref.read(dashboardNotifierProvider.notifier).updateSim(
+          id: id,
           operatorCode: _operatorCode,
-          operatorName: operators[_operatorCode] ?? _operatorCode,
           phoneNumber: _phoneController.text.trim(),
           isActive: _isActive,
         );
 
+    if (!mounted) return;
+    setState(() => _isSubmitting = false);
+
+    if (error != null) {
+      _showSnack(error);
+      return;
+    }
+
     Navigator.of(context).pop();
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        const SnackBar(
-          behavior: SnackBarBehavior.floating,
-          content: Text('SIM mise a jour.'),
-        ),
-      );
+    _showSnack('SIM mise a jour.');
   }
 
   Future<void> _confirmDelete() async {
@@ -192,17 +211,35 @@ class _ModifySimSheetState extends ConsumerState<ModifySimSheet> {
 
     if (confirmed != true || !mounted) return;
 
-    ref
-        .read(dashboardNotifierProvider.notifier)
-        .removeSim(widget.balance.operatorCode);
+    final id = widget.balance.id;
+    if (id == null) {
+      _showSnack('SIM introuvable (identifiant manquant).');
+      return;
+    }
+
+    setState(() => _isDeleting = true);
+    final error =
+        await ref.read(dashboardNotifierProvider.notifier).removeSim(id);
+
+    if (!mounted) return;
+    setState(() => _isDeleting = false);
+
+    if (error != null) {
+      _showSnack(error);
+      return;
+    }
 
     Navigator.of(context).pop();
+    _showSnack('SIM supprimee.');
+  }
+
+  void _showSnack(String message) {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
-        const SnackBar(
+        SnackBar(
           behavior: SnackBarBehavior.floating,
-          content: Text('SIM supprimee.'),
+          content: Text(message),
         ),
       );
   }

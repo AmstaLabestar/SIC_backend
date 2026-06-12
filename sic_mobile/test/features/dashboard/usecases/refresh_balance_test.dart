@@ -63,4 +63,24 @@ class _FakeDashboardRepository implements DashboardRepository {
 
     return const Right(unit);
   }
+
+  @override
+  Future<Either<Failure, Unit>> updatePuce({
+    required String id,
+    required String operatorCode,
+    required String phoneNumber,
+    required bool isActive,
+  }) async =>
+      const Right(unit);
+
+  @override
+  Future<Either<Failure, Unit>> deletePuce(String id) async =>
+      const Right(unit);
+
+  @override
+  Future<Either<Failure, Unit>> createPuce({
+    required String operatorCode,
+    required String phoneNumber,
+  }) async =>
+      const Right(unit);
 }

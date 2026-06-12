@@ -30,4 +30,50 @@ class DashboardRepositoryImpl implements DashboardRepository {
       return Left(mapDioErrorToFailure(error));
     }
   }
+
+  @override
+  Future<Either<Failure, Unit>> updatePuce({
+    required String id,
+    required String operatorCode,
+    required String phoneNumber,
+    required bool isActive,
+  }) async {
+    try {
+      await remoteDatasource.updatePuce(
+        id: id,
+        operatorCode: operatorCode,
+        phoneNumber: phoneNumber,
+        isActive: isActive,
+      );
+      return const Right(unit);
+    } catch (error) {
+      return Left(mapDioErrorToFailure(error));
+    }
+  }
+
+  @override
+  Future<Either<Failure, Unit>> deletePuce(String id) async {
+    try {
+      await remoteDatasource.deletePuce(id);
+      return const Right(unit);
+    } catch (error) {
+      return Left(mapDioErrorToFailure(error));
+    }
+  }
+
+  @override
+  Future<Either<Failure, Unit>> createPuce({
+    required String operatorCode,
+    required String phoneNumber,
+  }) async {
+    try {
+      await remoteDatasource.createPuce(
+        operatorCode: operatorCode,
+        phoneNumber: phoneNumber,
+      );
+      return const Right(unit);
+    } catch (error) {
+      return Left(mapDioErrorToFailure(error));
+    }
+  }
 }

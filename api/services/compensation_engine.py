@@ -104,17 +104,26 @@ class TransactionValidator:
     Validateur pour les transactions SIC.
     """
 
-    # Opérateurs supportés
-    VALID_OPERATORS = ['ORANGE', 'MOOV', 'TELECEL', 'CORIS']
+    # Opérateurs supportés (Burkina Faso + Côte d'Ivoire)
+    VALID_OPERATORS = ['ORANGE', 'MOOV', 'TELECEL', 'MTN']
 
-    # Regex pour validation des numéros de téléphone
-    PHONE_PATTERNS = {
-        'ORANGE': r'^(\+224|224)?[6][0-9]{7}$',  # Niger
-        'MOOV': r'^(\+224|224)?[6][2-5][0-9]{6}$',
-        'TELECEL': r'^(\+224|224)?[6][5-6][0-9]{6}$',
-        'CORIS': r'^(\+224|224)?[6][0-9]{7}$',
-        'DEFAULT': r'^(\+224|224)?[6][0-9]{7}$',
+    # Préfixes nationaux par pays / opérateur (numéro SANS indicatif).
+    # Burkina Faso (+226) : 8 chiffres.   Côte d'Ivoire (+225) : 10 chiffres.
+    # Telecel n'existe pas en Côte d'Ivoire ; MTN n'existe pas au Burkina.
+    BF_PREFIXES = {
+        'ORANGE': ['04', '05', '06', '07', '44', '54', '55', '56', '57',
+                   '64', '65', '66', '67', '74', '75', '76', '77'],
+        'MOOV': ['01', '02', '03', '50', '51', '52', '53',
+                 '60', '61', '62', '63', '70', '71', '72', '73'],
+        'TELECEL': ['58', '59', '68', '69', '78', '79'],
     }
+    CI_PREFIXES = {
+        'ORANGE': ['07'],
+        'MTN': ['05'],
+        'MOOV': ['01'],
+    }
+    # Indicatifs pris en charge (les autres pays sont volontairement exclus).
+    COUNTRY_CODES = ('+226', '226', '+225', '225')
 
     @classmethod
     def validate_amount(cls, amount):
@@ -133,22 +142,66 @@ class TransactionValidator:
         return True
 
     @classmethod
-    def validate_phone_number(cls, phone_number, operator=None):
-        """Valide le format du numéro de téléphone."""
+    def normalize_phone_number(cls, phone_number):
+        """Nettoie le numéro et retire un éventuel indicatif (+226 / +225).
+
+        Retourne le numéro national : 8 chiffres (Burkina) ou 10 (Côte d'Ivoire).
+        """
+        phone = (phone_number or '').strip()
+        for ch in (' ', '-', '.', '(', ')'):
+            phone = phone.replace(ch, '')
+        for code in cls.COUNTRY_CODES:
+            if phone.startswith(code):
+                return phone[len(code):]
+        if phone.startswith('+'):
+            phone = phone[1:]
+        return phone
+
+    @classmethod
+    def _patterns_for_operator(cls, operator):
+        """Regex compilées (numéro national) valides pour cet opérateur."""
         import re
+        operator = (operator or '').upper()
+        patterns = []
+        bf = cls.BF_PREFIXES.get(operator)
+        if bf:
+            patterns.append(re.compile(r'^(?:%s)\d{6}$' % '|'.join(bf)))  # 8 chiffres
+        ci = cls.CI_PREFIXES.get(operator)
+        if ci:
+            patterns.append(re.compile(r'^(?:%s)\d{8}$' % '|'.join(ci)))  # 10 chiffres
+        return patterns
 
-        # Nettoyage du numéro
-        phone = phone_number.strip().replace(' ', '').replace('-', '')
+    @classmethod
+    def validate_phone_number(cls, phone_number, operator=None):
+        """Valide le numéro pour l'opérateur (Burkina +226 / Côte d'Ivoire +225).
 
-        # Pattern selon l'opérateur ou pattern par défaut
-        pattern = cls.PHONE_PATTERNS.get(operator.upper() if operator else 'DEFAULT', cls.PHONE_PATTERNS['DEFAULT'])
+        Lève ValueError si le format ne correspond à aucun préfixe valide.
+        Retourne le numéro national normalisé.
+        """
+        national = cls.normalize_phone_number(phone_number)
 
-        if not re.match(pattern, phone):
-            logger.warning(f"Format de téléphone potentiellement invalide: {phone_number} pour {operator}")
-            # Warning mais pas d'erreur - certains numéros peuvent avoir des formats spéciaux
-            # return False
+        if operator:
+            patterns = cls._patterns_for_operator(operator)
+            if not patterns:
+                raise ValueError(
+                    f"Opérateur invalide: {operator}. "
+                    f"Options: {', '.join(cls.VALID_OPERATORS)}"
+                )
+        else:
+            # Sans opérateur précisé : accepter tout opérateur connu.
+            patterns = []
+            for op in cls.VALID_OPERATORS:
+                patterns.extend(cls._patterns_for_operator(op))
 
-        return True
+        if not any(p.match(national) for p in patterns):
+            op_label = (operator or '').upper() or 'cet opérateur'
+            raise ValueError(
+                f"Numéro invalide pour {op_label}. Format attendu : Burkina Faso "
+                f"(+226, 8 chiffres) ou Côte d'Ivoire (+225, 10 chiffres) selon "
+                f"les préfixes de l'opérateur."
+            )
+
+        return national
 
     @classmethod
     def validate_transaction(cls, tx_type, amount, target_operator, target_phone_number):

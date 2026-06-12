@@ -13,6 +13,7 @@ import '../../../../core/widgets/sic_loading.dart';
 import '../../../balance_update/presentation/widgets/balance_update_bottom_sheet.dart';
 import '../../domain/entities/agent_summary.dart';
 import '../providers/dashboard_provider.dart';
+import '../widgets/add_sim_sheet.dart';
 import '../widgets/balance_hero_card.dart';
 import '../widgets/modify_sim_sheet.dart';
 import '../widgets/operations_bar.dart';
@@ -127,7 +128,7 @@ class _DashboardContent extends ConsumerWidget {
             padding: const EdgeInsets.only(top: 16, bottom: 8),
             child: SimCardsSection(
               balances: summary.balances,
-              onManageTap: () => context.go('/dashboard/sims'),
+              onManageTap: () => AddSimSheet.show(context),
               onCardTap: (balance) =>
                   BalanceUpdateBottomSheet.show(context, balance),
               onHistoryTap: (balance) =>

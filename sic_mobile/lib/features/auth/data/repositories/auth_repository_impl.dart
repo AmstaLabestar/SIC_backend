@@ -1,4 +1,5 @@
 import 'package:dartz/dartz.dart';
+import 'package:dio/dio.dart';
 
 import '../../../../core/errors/failures.dart';
 import '../../../../core/network/dio_failure.dart';
@@ -27,6 +28,15 @@ class AuthRepositoryImpl implements AuthRepository {
       final profile = await _datasource.getProfile();
       return Right(profile);
     } catch (error) {
+      // Sur le login, un 401 signifie "identifiants incorrects",
+      // pas "session expiree".
+      if (error is DioException && error.response?.statusCode == 401) {
+        return const Left(
+          ValidationFailure(
+            'Identifiants incorrects. Verifiez votre identifiant et votre mot de passe.',
+          ),
+        );
+      }
       return Left(mapDioErrorToFailure(error));
     }
   }

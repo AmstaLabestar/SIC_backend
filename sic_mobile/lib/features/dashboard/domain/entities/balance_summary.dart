@@ -10,7 +10,12 @@ class BalanceSummary extends Equatable {
     required this.alertThreshold,
     required this.lastUpdated,
     this.isActive = true,
+    this.id,
   });
+
+  /// Identifiant de la puce cote backend (`/puces/{id}/`).
+  /// `null` pour les donnees factices/locales sans correspondance serveur.
+  final String? id;
 
   final String operatorCode;
   final String operatorName;
@@ -36,6 +41,7 @@ class BalanceSummary extends Equatable {
   }
 
   BalanceSummary copyWith({
+    String? id,
     String? operatorCode,
     String? operatorName,
     String? phoneNumber,
@@ -49,6 +55,7 @@ class BalanceSummary extends Equatable {
     final nextThreshold = alertThreshold ?? this.alertThreshold;
 
     return BalanceSummary(
+      id: id ?? this.id,
       operatorCode: operatorCode ?? this.operatorCode,
       operatorName: operatorName ?? this.operatorName,
       phoneNumber: phoneNumber ?? this.phoneNumber,
@@ -62,6 +69,7 @@ class BalanceSummary extends Equatable {
 
   @override
   List<Object?> get props => [
+        id,
         operatorCode,
         operatorName,
         phoneNumber,

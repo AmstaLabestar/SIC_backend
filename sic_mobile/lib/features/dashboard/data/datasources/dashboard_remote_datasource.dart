@@ -62,6 +62,45 @@ class DashboardRemoteDatasource {
   /// pas d'endpoint "refresh solde" dedie cote backend.
   Future<void> refreshBalance(String operatorCode) async {}
 
+  /// Modifie une puce : `PATCH /puces/{id}/`.
+  /// Le code operateur mobile (ex. OM) est traduit vers le format backend
+  /// (ex. ORANGE). Le solde n'est jamais modifie ici (gere cote admin).
+  Future<void> updatePuce({
+    required String id,
+    required String operatorCode,
+    required String phoneNumber,
+    required bool isActive,
+  }) async {
+    await _dio.patch<Map<String, dynamic>>(
+      ApiConstants.puce(id),
+      data: {
+        'operator': OperatorMapping.toBackend(operatorCode),
+        'phone_number': phoneNumber,
+        'is_active': isActive,
+      },
+    );
+  }
+
+  /// Supprime une puce : `DELETE /puces/{id}/`.
+  Future<void> deletePuce(String id) async {
+    await _dio.delete<void>(ApiConstants.puce(id));
+  }
+
+  /// Ajoute une puce : `POST /puces/`.
+  /// Le backend refuse les doublons et impose un maximum de puces par agent.
+  Future<void> createPuce({
+    required String operatorCode,
+    required String phoneNumber,
+  }) async {
+    await _dio.post<Map<String, dynamic>>(
+      ApiConstants.puces,
+      data: {
+        'operator': OperatorMapping.toBackend(operatorCode),
+        'phone_number': phoneNumber,
+      },
+    );
+  }
+
   Future<(int, double)> _todayTransactions() async {
     try {
       final response = await _dio.get<Map<String, dynamic>>(
@@ -95,6 +134,7 @@ class DashboardRemoteDatasource {
     );
     final balance = _toDouble(puce['balance']);
     return BalanceSummaryModel(
+      id: puce['id']?.toString(),
       operatorCode: operator.code,
       operatorName: operator.name,
       phoneNumber: puce['phone_number']?.toString() ?? '',

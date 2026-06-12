@@ -1,5 +1,5 @@
 /// Correspondance entre les codes operateur du backend Django
-/// (`ORANGE`, `MOOV`, `TELECEL`, `CORIS`) et ceux utilises par le mobile.
+/// (`ORANGE`, `MOOV`, `TELECEL`, `MTN`) et ceux utilises par le mobile.
 class OperatorMapping {
   const OperatorMapping._();
 
@@ -12,6 +12,9 @@ class OperatorMapping {
         return (code: 'MOOV', name: 'Moov Money');
       case 'TELECEL':
         return (code: 'TELECEL', name: 'Telecel Money');
+      case 'MTN':
+        return (code: 'MTN', name: 'MTN Money');
+      // CORIS : ancien operateur, conserve pour l'affichage de donnees legacy.
       case 'CORIS':
         return (code: 'CORIS', name: 'Coris Money');
       default:

@@ -74,7 +74,7 @@ class TransactionValidatorTest(TestCase):
 
     def test_validate_operator_valid(self):
         """Test la validation d'un opérateur valide."""
-        for op in ['ORANGE', 'MOOV', 'TELECEL', 'CORIS']:
+        for op in ['ORANGE', 'MOOV', 'TELECEL', 'MTN']:
             self.assertTrue(TransactionValidator.validate_operator(op))
 
     def test_validate_operator_invalid(self):
@@ -83,11 +83,20 @@ class TransactionValidatorTest(TestCase):
             TransactionValidator.validate_operator('INVALID')
 
     def test_validate_phone_number(self):
-        """Test la validation d'un numéro de téléphone."""
-        # Numéro valide avec indicatif
-        self.assertTrue(TransactionValidator.validate_phone_number('+224621234567', 'ORANGE'))
-        # Numéro sans indicatif
-        self.assertTrue(TransactionValidator.validate_phone_number('621234567', 'MOOV'))
+        """Test la validation d'un numéro de téléphone (Burkina Faso)."""
+        # Orange Burkina (8 chiffres, préfixe 07) avec indicatif +226
+        self.assertEqual(
+            TransactionValidator.validate_phone_number('+22607123456', 'ORANGE'),
+            '07123456',
+        )
+        # Moov Burkina (préfixe 70) sans indicatif
+        self.assertEqual(
+            TransactionValidator.validate_phone_number('70123456', 'MOOV'),
+            '70123456',
+        )
+        # Numéro qui ne correspond pas à l'opérateur -> rejet
+        with self.assertRaises(ValueError):
+            TransactionValidator.validate_phone_number('70123456', 'ORANGE')
 
 
 class AgentModelTest(TestCase):
@@ -215,7 +224,7 @@ class CompensationEngineTest(TestCase):
             tx_type='DEPOT',
             amount=Decimal('5000'),
             target_operator='ORANGE',
-            target_phone_number='+224621234568'
+            target_phone_number='07000002'
         )
 
         self.assertIsNotNone(tx.id)
@@ -231,7 +240,7 @@ class CompensationEngineTest(TestCase):
             agent=self.agent,
             amount=Decimal('3000'),
             target_operator='MOOV',
-            target_phone_number='+224621234568'
+            target_phone_number='70000002'
         )
 
         self.assertIsNotNone(tx.id)
@@ -310,7 +319,7 @@ class TransactionAPITest(APITestCase):
         response = self.client.post('/api/transactions/deposit/', {
             'amount': '5000',
             'target_operator': 'ORANGE',
-            'target_phone_number': '+224621234568'
+            'target_phone_number': '07000002'
         })
         self.assertIn(response.status_code, [status.HTTP_201_CREATED, status.HTTP_400_BAD_REQUEST])
 
@@ -319,7 +328,7 @@ class TransactionAPITest(APITestCase):
         response = self.client.post('/api/transactions/deposit/', {
             'amount': '50',  # Trop petit
             'target_operator': 'ORANGE',
-            'target_phone_number': '+224621234568'
+            'target_phone_number': '07000002'
         })
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
@@ -394,7 +403,7 @@ class SecurityTest(APITestCase):
         response = self.client.post('/api/transactions/deposit/', {
             'amount': '1000',
             'target_operator': 'ORANGE',
-            'target_phone_number': '+224621234568'
+            'target_phone_number': '07000002'
         })
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
