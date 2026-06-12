@@ -6,6 +6,7 @@ import '../../features/account/presentation/screens/account_screen.dart';
 import '../../features/alerts/presentation/screens/alerts_screen.dart';
 import '../../features/auth/presentation/providers/auth_provider.dart';
 import '../../features/auth/presentation/screens/login_screen.dart';
+import '../../features/auth/presentation/screens/register_screen.dart';
 import '../../features/auth/presentation/screens/splash_screen.dart';
 import '../../features/dashboard/presentation/screens/dashboard_screen.dart';
 import '../../features/settings/presentation/screens/settings_screen.dart';
@@ -35,10 +36,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       }
 
       final isLoggedIn = auth.value != null;
-      final onAuthScreen = location == '/login' || location == '/splash';
+      final onAuthScreen = location == '/login' ||
+          location == '/register' ||
+          location == '/splash';
 
       if (!isLoggedIn) {
-        return location == '/login' ? null : '/login';
+        return (location == '/login' || location == '/register')
+            ? null
+            : '/login';
       }
       if (onAuthScreen) {
         return '/dashboard';
@@ -53,6 +58,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/login',
         builder: (context, state) => const LoginScreen(),
+      ),
+      GoRoute(
+        path: '/register',
+        builder: (context, state) => const RegisterScreen(),
       ),
       GoRoute(
         path: '/operations/depot',

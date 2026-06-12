@@ -1,6 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/network/network_providers.dart';
+import '../../../dashboard/presentation/providers/dashboard_provider.dart';
+import '../../../transactions/presentation/providers/transaction_providers.dart';
 import '../../data/datasources/auth_remote_datasource.dart';
 import '../../data/repositories/auth_repository_impl.dart';
 import '../../domain/entities/auth_user.dart';
@@ -51,20 +53,56 @@ class AuthController extends AsyncNotifier<AuthUser?> {
         return failure.message;
       },
       (user) {
+        // Nouvel utilisateur connecte : on purge les donnees de l'eventuel
+        // compte precedent (dashboard, historique) pour eviter un affichage
+        // perime.
+        _invalidateUserData();
         state = AsyncValue.data(user);
         return null;
       },
     );
   }
 
+  /// Reinitialise les providers de donnees liees a l'utilisateur courant.
+  void _invalidateUserData() {
+    ref.invalidate(dashboardNotifierProvider);
+    ref.invalidate(transactionsNotifierProvider);
+  }
+
+  /// Inscription. Retourne un message d'erreur, ou `null` si succes.
+  /// N'authentifie pas automatiquement (compte en attente de validation KYC).
+  Future<String?> register({
+    required String username,
+    required String email,
+    required String password,
+    required String passwordConfirm,
+    required String phoneNumber,
+    required String firstName,
+    required String lastName,
+  }) async {
+    final repo = ref.read(authRepositoryProvider);
+    final result = await repo.register(
+      username: username,
+      email: email,
+      password: password,
+      passwordConfirm: passwordConfirm,
+      phoneNumber: phoneNumber,
+      firstName: firstName,
+      lastName: lastName,
+    );
+    return result.fold((failure) => failure.message, (_) => null);
+  }
+
   Future<void> logout() async {
     final repo = ref.read(authRepositoryProvider);
     await repo.logout();
+    _invalidateUserData();
     state = const AsyncValue.data(null);
   }
 
   /// Appele par l'intercepteur quand le refresh echoue (session expiree).
   void onExpired() {
+    _invalidateUserData();
     state = const AsyncValue.data(null);
   }
 }

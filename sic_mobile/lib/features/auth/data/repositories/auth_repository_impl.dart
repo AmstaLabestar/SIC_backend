@@ -42,6 +42,32 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   @override
+  Future<Either<Failure, Unit>> register({
+    required String username,
+    required String email,
+    required String password,
+    required String passwordConfirm,
+    required String phoneNumber,
+    required String firstName,
+    required String lastName,
+  }) async {
+    try {
+      await _datasource.register(
+        username: username,
+        email: email,
+        password: password,
+        passwordConfirm: passwordConfirm,
+        phoneNumber: phoneNumber,
+        firstName: firstName,
+        lastName: lastName,
+      );
+      return const Right(unit);
+    } catch (error) {
+      return Left(mapDioErrorToFailure(error));
+    }
+  }
+
+  @override
   Future<Either<Failure, AuthUser>> getProfile() async {
     try {
       return Right(await _datasource.getProfile());

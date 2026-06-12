@@ -270,7 +270,9 @@ REST_FRAMEWORK = {
         'user': '60/minute',
         'login': '5/minute',       # Limite stricte sur l'authentification
         'pin': '5/minute',         # Limite pour vérification PIN
-        'register': '3/hour',      # Anti-bruteforce sur l'inscription
+        # Anti-bruteforce sur l'inscription. Defaut 3/hour (prod) ;
+        # surchargeable via REGISTER_THROTTLE_RATE (ex. 1000/hour en dev).
+        'register': get_env('REGISTER_THROTTLE_RATE', default='3/hour'),
         'transaction': '30/minute' # Limite sur les transactions
     },
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',

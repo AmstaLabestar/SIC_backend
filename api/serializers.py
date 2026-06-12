@@ -212,8 +212,9 @@ class RegisterSerializer(serializers.ModelSerializer):
         except ValueError as e:
             raise serializers.ValidationError(str(e))
 
-        # Vérifier si déjà utilisé (sur le numéro normalisé)
-        if Agent.objects.filter(phone_number=national).exists():
+        # Vérifier si déjà utilisé (profil agent OU puce) sur le numéro normalisé.
+        if (Agent.objects.filter(phone_number=national).exists()
+                or Puce.objects.filter(phone_number=national).exists()):
             raise serializers.ValidationError("Ce numéro de téléphone est déjà utilisé.")
 
         return national
@@ -236,13 +237,26 @@ class RegisterSerializer(serializers.ModelSerializer):
         )
 
         # Créer le profil agent
-        Agent.objects.create(
+        agent = Agent.objects.create(
             user=user,
             phone_number=phone_number,
             first_name=first_name,
             last_name=last_name,
             kyc_status='PENDING'  # Par défaut en attente de validation KYC
         )
+
+        # Le numéro d'inscription devient la première puce de l'agent
+        # (opérateur déduit du préfixe).
+        from api.services.compensation_engine import TransactionValidator
+        operator = TransactionValidator.operator_for_number(phone_number)
+        if operator:
+            Puce.objects.create(
+                agent=agent,
+                operator=operator,
+                phone_number=phone_number,
+                balance=0,
+                is_active=True,
+            )
 
         return user
 
@@ -497,7 +511,45 @@ class PuceSerializer(serializers.ModelSerializer):
                 )
             except ValueError as e:
                 raise serializers.ValidationError({'phone_number': str(e)})
+            phone = national
             attrs['phone_number'] = national
+
+            # Unicité GLOBALE du numéro : une puce = un compte float réel chez
+            # l'opérateur. Un même numéro ne peut appartenir qu'à un seul agent
+            # (sinon un agrégateur de paiement créditerait/débiterait le mauvais
+            # compte). On vérifie aussi les numéros d'inscription des agents.
+            request = self.context.get('request')
+            agent = getattr(getattr(request, 'user', None), 'agent_profile', None)
+
+            other_puces = Puce.objects.filter(phone_number=national)
+            if self.instance is not None:
+                other_puces = other_puces.exclude(pk=self.instance.pk)
+
+            if agent is not None:
+                used_by_other_agent = (
+                    other_puces.exclude(agent=agent).exists()
+                    or Agent.objects.filter(phone_number=national)
+                    .exclude(pk=agent.pk)
+                    .exists()
+                )
+                used_by_self = other_puces.filter(agent=agent).exists()
+            else:
+                used_by_other_agent = (
+                    other_puces.exists()
+                    or Agent.objects.filter(phone_number=national).exists()
+                )
+                used_by_self = False
+
+            if used_by_other_agent:
+                raise serializers.ValidationError({
+                    'phone_number': "Ce numéro est déjà rattaché à un autre "
+                                    "compte. Un numéro ne peut appartenir qu'à "
+                                    "un seul agent."
+                })
+            if used_by_self:
+                raise serializers.ValidationError({
+                    'phone_number': "Vous avez déjà une puce avec ce numéro."
+                })
 
         if 'operator' in attrs:
             attrs['operator'] = operator

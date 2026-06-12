@@ -43,4 +43,29 @@ void main() {
       expect(Validators.validateOperatorPhone('', 'OM'), isNotNull);
     });
   });
+
+  group('Validators.validateAnyPhone', () {
+    test('accepte un numero Burkina valide de n\'importe quel operateur', () {
+      expect(Validators.validateAnyPhone('07123456'), isNull); // Orange
+      expect(Validators.validateAnyPhone('70123456'), isNull); // Moov
+      expect(Validators.validateAnyPhone('78123456'), isNull); // Telecel
+    });
+
+    test('accepte un numero Cote d\'Ivoire valide (10 chiffres)', () {
+      expect(Validators.validateAnyPhone('0501234567'), isNull); // MTN CI
+    });
+
+    test('indicatif +226 normalise', () {
+      expect(Validators.validateAnyPhone('+22607123456'), isNull);
+    });
+
+    test('mauvaise longueur / prefixe inconnu -> erreur', () {
+      expect(Validators.validateAnyPhone('0712345'), isNotNull);
+      expect(Validators.validateAnyPhone('99123456'), isNotNull);
+    });
+
+    test('vide -> erreur', () {
+      expect(Validators.validateAnyPhone(''), isNotNull);
+    });
+  });
 }

@@ -37,4 +37,29 @@ class AuthRemoteDatasource {
   Future<void> logout(String refresh) async {
     await _dio.post<void>(ApiConstants.logout, data: {'refresh': refresh});
   }
+
+  /// Inscription d'un nouvel agent (`POST /auth/register/`).
+  /// Le backend cree un compte KYC=PENDING et ne renvoie pas de tokens.
+  Future<void> register({
+    required String username,
+    required String email,
+    required String password,
+    required String passwordConfirm,
+    required String phoneNumber,
+    required String firstName,
+    required String lastName,
+  }) async {
+    await _dio.post<Map<String, dynamic>>(
+      ApiConstants.register,
+      data: {
+        'username': username,
+        'email': email,
+        'password': password,
+        'password_confirm': passwordConfirm,
+        'phone_number': phoneNumber,
+        'first_name': firstName,
+        'last_name': lastName,
+      },
+    );
+  }
 }

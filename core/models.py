@@ -65,8 +65,10 @@ class BiometricDevice(models.Model):
 class Puce(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     agent = models.ForeignKey(Agent, on_delete=models.CASCADE, related_name='puces')
-    operator = models.CharField(max_length=50) # ORANGE, MOOV, TELECEL, CORIS
-    phone_number = models.CharField(max_length=20)
+    operator = models.CharField(max_length=50) # ORANGE, MOOV, TELECEL, MTN
+    # Unicité globale : une puce = un compte float réel chez l'opérateur,
+    # un numéro ne peut appartenir qu'à un seul agent (intégrité fintech).
+    phone_number = models.CharField(max_length=20, unique=True)
     balance = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)

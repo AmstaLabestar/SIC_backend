@@ -67,6 +67,29 @@ class Validators {
     return 'Numero invalide pour cet operateur (Burkina : 8 chiffres).';
   }
 
+  /// Valide un numero sans operateur precise : accepte s'il correspond a
+  /// l'un des operateurs connus (Burkina 8 chiffres / Cote d'Ivoire 10).
+  static String? validateAnyPhone(String? value) {
+    final raw = value?.trim() ?? '';
+    if (raw.isEmpty) {
+      return 'Le numero est obligatoire.';
+    }
+    final national = normalizePhone(raw);
+    if (!RegExp(r'^\d+$').hasMatch(national)) {
+      return 'Le numero ne doit contenir que des chiffres.';
+    }
+    bool matches(Map<String, List<String>> table, int length) =>
+        table.values.any(
+          (prefixes) =>
+              national.length == length &&
+              prefixes.any(national.startsWith),
+        );
+    if (matches(_bfPrefixes, 8) || matches(_ciPrefixes, 10)) {
+      return null;
+    }
+    return 'Numero invalide (Burkina : 8 chiffres).';
+  }
+
   static String? validatePhone(String? value) {
     final phone = value?.trim() ?? '';
 
