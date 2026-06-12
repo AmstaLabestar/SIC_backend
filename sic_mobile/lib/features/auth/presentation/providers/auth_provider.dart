@@ -7,6 +7,7 @@ import '../../data/datasources/auth_remote_datasource.dart';
 import '../../data/repositories/auth_repository_impl.dart';
 import '../../domain/entities/auth_user.dart';
 import '../../domain/repositories/auth_repository.dart';
+import 'app_lock_provider.dart';
 
 final authRemoteDatasourceProvider = Provider<AuthRemoteDatasource>((ref) {
   return AuthRemoteDatasource(ref.watch(dioProvider));
@@ -57,6 +58,8 @@ class AuthController extends AsyncNotifier<AuthUser?> {
         // compte precedent (dashboard, historique) pour eviter un affichage
         // perime.
         _invalidateUserData();
+        // L'agent vient de saisir ses identifiants -> app deverrouillee.
+        ref.read(appLockProvider.notifier).unlock();
         state = AsyncValue.data(user);
         return null;
       },
@@ -112,20 +115,36 @@ class AuthController extends AsyncNotifier<AuthUser?> {
       if (current != null) {
         state = AsyncValue.data(current.copyWith(hasPin: true));
       }
+      // Le PIN vient d'etre cree apres saisie du mot de passe -> deverrouille.
+      ref.read(appLockProvider.notifier).unlock();
       return null;
     });
+  }
+
+  /// Verifie le code PIN (verrou app, et bientot chaque operation).
+  /// Retourne `(error, token)` : `error` non nul si echec, sinon `token`
+  /// porte le `pin_token` temporaire (~5 min).
+  Future<({String? error, String? token})> verifyPin(String pin) async {
+    final repo = ref.read(authRepositoryProvider);
+    final result = await repo.verifyPin(pin);
+    return result.fold(
+      (failure) => (error: failure.message, token: null),
+      (token) => (error: null, token: token),
+    );
   }
 
   Future<void> logout() async {
     final repo = ref.read(authRepositoryProvider);
     await repo.logout();
     _invalidateUserData();
+    ref.read(appLockProvider.notifier).lock();
     state = const AsyncValue.data(null);
   }
 
   /// Appele par l'intercepteur quand le refresh echoue (session expiree).
   void onExpired() {
     _invalidateUserData();
+    ref.read(appLockProvider.notifier).lock();
     state = const AsyncValue.data(null);
   }
 }

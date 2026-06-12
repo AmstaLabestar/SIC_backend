@@ -26,12 +26,14 @@ class TransactionRepositoryImpl implements TransactionRepository {
     required double amount,
     required String operatorCode,
     required String phoneNumber,
+    String? pinToken,
   }) async {
     try {
       return Right(await _datasource.deposit(
         amount: amount,
         operatorCode: operatorCode,
         phoneNumber: phoneNumber,
+        pinToken: pinToken,
       ));
     } catch (error) {
       return Left(mapDioErrorToFailure(error));
@@ -43,12 +45,14 @@ class TransactionRepositoryImpl implements TransactionRepository {
     required double amount,
     required String operatorCode,
     required String phoneNumber,
+    String? pinToken,
   }) async {
     try {
       return Right(await _datasource.withdraw(
         amount: amount,
         operatorCode: operatorCode,
         phoneNumber: phoneNumber,
+        pinToken: pinToken,
       ));
     } catch (error) {
       return Left(mapDioErrorToFailure(error));
@@ -60,12 +64,14 @@ class TransactionRepositoryImpl implements TransactionRepository {
     required double amount,
     required String sourcePuceId,
     required String targetPuceId,
+    String? pinToken,
   }) async {
     try {
       return Right(await _datasource.convert(
         amount: amount,
         sourcePuceId: sourcePuceId,
         targetPuceId: targetPuceId,
+        pinToken: pinToken,
       ));
     } catch (error) {
       return Left(mapDioErrorToFailure(error));

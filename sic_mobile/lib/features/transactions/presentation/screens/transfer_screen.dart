@@ -13,6 +13,7 @@ import '../../../dashboard/presentation/providers/dashboard_provider.dart';
 import '../../domain/entities/operation_result.dart';
 import '../providers/transaction_providers.dart';
 import '../widgets/operation_success_sheet.dart';
+import '../widgets/pin_prompt_sheet.dart';
 
 /// Transfert entre deux puces de l'agent (conversion / swap).
 class TransferScreen extends ConsumerStatefulWidget {
@@ -142,6 +143,13 @@ class _TransferScreenState extends ConsumerState<TransferScreen> {
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
+    // Regle mobile money : aucune operation sans le code PIN.
+    final pinToken = await PinPromptSheet.show(
+      context,
+      actionLabel: 'le transfert',
+    );
+    if (pinToken == null || !mounted) return; // agent a annule.
+
     final amount = double.parse(_amountController.text.trim());
     final repo = ref.read(transactionRepositoryProvider);
 
@@ -150,6 +158,7 @@ class _TransferScreenState extends ConsumerState<TransferScreen> {
       amount: amount,
       sourcePuceId: _sourceId!,
       targetPuceId: _targetId!,
+      pinToken: pinToken,
     );
 
     if (!mounted) return;

@@ -25,8 +25,9 @@ class _FakeTransactionRepository implements TransactionRepository {
     required double amount,
     required String operatorCode,
     required String phoneNumber,
+    String? pinToken,
   }) async {
-    calls.add('deposit:$amount:$operatorCode:$phoneNumber');
+    calls.add('deposit:$amount:$operatorCode:$phoneNumber:$pinToken');
     return _result(amount);
   }
 
@@ -35,8 +36,9 @@ class _FakeTransactionRepository implements TransactionRepository {
     required double amount,
     required String operatorCode,
     required String phoneNumber,
+    String? pinToken,
   }) async {
-    calls.add('withdraw:$amount:$operatorCode:$phoneNumber');
+    calls.add('withdraw:$amount:$operatorCode:$phoneNumber:$pinToken');
     return _result(amount);
   }
 
@@ -45,8 +47,9 @@ class _FakeTransactionRepository implements TransactionRepository {
     required double amount,
     required String sourcePuceId,
     required String targetPuceId,
+    String? pinToken,
   }) async {
-    calls.add('convert:$amount:$sourcePuceId:$targetPuceId');
+    calls.add('convert:$amount:$sourcePuceId:$targetPuceId:$pinToken');
     return _result(amount);
   }
 
@@ -108,14 +111,23 @@ void main() {
     addTearDown(container.dispose);
     final r = container.read(transactionRepositoryProvider);
 
-    await r.deposit(amount: 5000, operatorCode: 'OM', phoneNumber: '07000001');
-    await r.withdraw(amount: 3000, operatorCode: 'MOOV', phoneNumber: '70000001');
-    await r.convert(amount: 2000, sourcePuceId: 'a', targetPuceId: 'b');
+    await r.deposit(
+        amount: 5000,
+        operatorCode: 'OM',
+        phoneNumber: '07000001',
+        pinToken: 'tok-d');
+    await r.withdraw(
+        amount: 3000,
+        operatorCode: 'MOOV',
+        phoneNumber: '70000001',
+        pinToken: 'tok-w');
+    await r.convert(
+        amount: 2000, sourcePuceId: 'a', targetPuceId: 'b', pinToken: 'tok-c');
 
     expect(repo.calls, [
-      'deposit:5000.0:OM:07000001',
-      'withdraw:3000.0:MOOV:70000001',
-      'convert:2000.0:a:b',
+      'deposit:5000.0:OM:07000001:tok-d',
+      'withdraw:3000.0:MOOV:70000001:tok-w',
+      'convert:2000.0:a:b:tok-c',
     ]);
   });
 }

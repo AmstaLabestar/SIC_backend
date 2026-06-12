@@ -8,24 +8,29 @@ abstract class TransactionRepository {
   /// Historique des transactions de l'agent (`GET /transactions/`).
   Future<Either<Failure, List<AgentTransaction>>> getTransactions();
 
-  /// Depot : `POST /transactions/deposit/`.
+  /// Depot : `POST /transactions/deposit/`. [pinToken] (obligatoire des qu'un
+  /// PIN est configure) est transmis en en-tete `X-PIN-TOKEN`.
   Future<Either<Failure, OperationResult>> deposit({
     required double amount,
     required String operatorCode,
     required String phoneNumber,
+    String? pinToken,
   });
 
-  /// Retrait : `POST /transactions/withdraw/`.
+  /// Retrait : `POST /transactions/withdraw/`. Voir [deposit] pour [pinToken].
   Future<Either<Failure, OperationResult>> withdraw({
     required double amount,
     required String operatorCode,
     required String phoneNumber,
+    String? pinToken,
   });
 
   /// Transfert (conversion entre puces) : `POST /transactions/conversion/`.
+  /// Voir [deposit] pour [pinToken].
   Future<Either<Failure, OperationResult>> convert({
     required double amount,
     required String sourcePuceId,
     required String targetPuceId,
+    String? pinToken,
   });
 }

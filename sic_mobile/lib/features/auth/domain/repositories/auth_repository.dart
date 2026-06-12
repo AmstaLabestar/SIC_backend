@@ -28,6 +28,9 @@ abstract class AuthRepository {
     required String pinConfirm,
   });
 
+  /// Verifie le code PIN. Retourne le `pin_token` temporaire en cas de succes.
+  Future<Either<Failure, String>> verifyPin(String pin);
+
   /// Revoque la session (et purge toujours les tokens locaux).
   Future<Either<Failure, Unit>> logout();
 

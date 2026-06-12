@@ -7,6 +7,7 @@ import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/constants/app_text_styles.dart';
 import '../../../../core/widgets/sic_button.dart';
 import '../providers/auth_provider.dart';
+import '../widgets/pin_header.dart';
 import '../widgets/pin_keypad.dart';
 
 enum _Phase { enterPin, confirmPin, password }
@@ -167,7 +168,7 @@ class _PinSetupScreenState extends ConsumerState<PinSetupScreen> {
     final isConfirm = _phase == _Phase.confirmPin;
     return Column(
       children: [
-        _GradientHeader(
+        PinGradientHeader(
           showBack: canGoBack,
           onBack: _onBack,
           icon: isConfirm ? Icons.lock_outline_rounded : Icons.pin_outlined,
@@ -202,7 +203,7 @@ class _PinSetupScreenState extends ConsumerState<PinSetupScreen> {
   Widget _passwordStep() {
     return Column(
       children: [
-        _GradientHeader(
+        PinGradientHeader(
           showBack: true,
           onBack: _onBack,
           icon: Icons.verified_user_outlined,
@@ -241,7 +242,7 @@ class _PinSetupScreenState extends ConsumerState<PinSetupScreen> {
                   ),
                   if (_error != null) ...[
                     const SizedBox(height: AppSpacing.md),
-                    _ErrorBanner(message: _error!),
+                    PinErrorBanner(message: _error!),
                   ],
                   const SizedBox(height: AppSpacing.xl),
                   SicButton(
@@ -255,129 +256,6 @@ class _PinSetupScreenState extends ConsumerState<PinSetupScreen> {
           ),
         ),
       ],
-    );
-  }
-}
-
-/// En-tete degrade (style hero du dashboard) partage par les etapes.
-class _GradientHeader extends StatelessWidget {
-  const _GradientHeader({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    this.child,
-    this.showBack = false,
-    this.onBack,
-    this.subtitleError = false,
-  });
-
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final Widget? child;
-  final bool showBack;
-  final VoidCallback? onBack;
-  final bool subtitleError;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [AppColors.primary, AppColors.primaryLight],
-        ),
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(28)),
-      ),
-      child: SafeArea(
-        bottom: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 4, 20, AppSpacing.lg),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              SizedBox(
-                height: 40,
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: showBack
-                      ? IconButton(
-                          icon: const Icon(Icons.arrow_back,
-                              color: AppColors.onPrimary),
-                          onPressed: onBack,
-                        )
-                      : null,
-                ),
-              ),
-              Container(
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: AppColors.onPrimary.withValues(alpha: 0.15),
-                ),
-                child: Icon(icon, color: AppColors.onPrimary, size: 28),
-              ),
-              const SizedBox(height: AppSpacing.sm),
-              Text(
-                title,
-                style: AppTextStyles.titleMedium
-                    .copyWith(color: AppColors.onPrimary),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: AppSpacing.xs),
-              Text(
-                subtitle,
-                style: AppTextStyles.bodySmall.copyWith(
-                  color: subtitleError
-                      ? const Color(0xFFFFD2D2)
-                      : AppColors.onPrimary.withValues(alpha: 0.85),
-                ),
-                textAlign: TextAlign.center,
-              ),
-              if (child != null) ...[
-                const SizedBox(height: AppSpacing.lg),
-                child!,
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ErrorBanner extends StatelessWidget {
-  const _ErrorBanner({required this.message});
-
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: AppColors.danger.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.danger.withValues(alpha: 0.25)),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.error_outline_rounded,
-              color: AppColors.danger, size: 20),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: Text(
-              message,
-              style: AppTextStyles.caption.copyWith(color: AppColors.danger),
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

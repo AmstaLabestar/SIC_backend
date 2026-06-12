@@ -104,6 +104,28 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   @override
+  Future<Either<Failure, String>> verifyPin(String pin) async {
+    try {
+      final token = await _datasource.verifyPin(pin);
+      return Right(token);
+    } catch (error) {
+      // 401 = PIN incorrect, 429 = compte verrouille : le backend renvoie un
+      // message explicite (tentatives restantes / duree) qu'on restitue tel quel.
+      if (error is DioException) {
+        final code = error.response?.statusCode;
+        if (code == 401 || code == 429 || code == 400) {
+          final data = error.response?.data;
+          final message = data is Map ? data['error'] as String? : null;
+          return Left(
+            ValidationFailure(message ?? 'Code PIN incorrect.'),
+          );
+        }
+      }
+      return Left(mapDioErrorToFailure(error));
+    }
+  }
+
+  @override
   Future<Either<Failure, Unit>> logout() async {
     try {
       final refresh = await _storage.readRefresh();
