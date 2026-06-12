@@ -12,6 +12,7 @@ import '../../../sim_management/presentation/widgets/operator_selector.dart';
 import '../../domain/entities/operation_result.dart';
 import '../providers/transaction_providers.dart';
 import '../widgets/operation_success_sheet.dart';
+import '../widgets/pin_prompt_sheet.dart';
 
 /// Formulaire de depot ou de retrait (montant + operateur + numero cible).
 class MoneyOperationScreen extends ConsumerStatefulWidget {
@@ -112,6 +113,13 @@ class _MoneyOperationScreenState extends ConsumerState<MoneyOperationScreen> {
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
+    // Regle mobile money : aucune operation sans le code PIN.
+    final pinToken = await PinPromptSheet.show(
+      context,
+      actionLabel: 'le ${widget._title.toLowerCase()}',
+    );
+    if (pinToken == null || !mounted) return; // agent a annule.
+
     final amount = double.parse(_amountController.text.trim());
     final phone = _phoneController.text.trim();
     final repo = ref.read(transactionRepositoryProvider);
@@ -122,11 +130,13 @@ class _MoneyOperationScreenState extends ConsumerState<MoneyOperationScreen> {
             amount: amount,
             operatorCode: _operatorCode,
             phoneNumber: phone,
+            pinToken: pinToken,
           )
         : await repo.withdraw(
             amount: amount,
             operatorCode: _operatorCode,
             phoneNumber: phone,
+            pinToken: pinToken,
           );
 
     if (!mounted) return;
