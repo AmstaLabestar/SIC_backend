@@ -10,6 +10,7 @@ class AuthUser extends Equatable {
     required this.email,
     required this.kycStatus,
     required this.isSuspended,
+    this.accountType = 'AGENT',
     this.hasPin = false,
   });
 
@@ -21,8 +22,15 @@ class AuthUser extends Equatable {
   final String kycStatus; // PENDING | APPROVED | REJECTED
   final bool isSuspended;
 
+  /// Type de compte : 'AGENT' (PDV) ou 'CLIENT' (grand public). Pilote la
+  /// navigation et les fonctionnalites accessibles (lots D*).
+  final String accountType;
+
   /// Vrai si l'agent a deja configure un code PIN (claim du JWT d'acces).
   final bool hasPin;
+
+  bool get isAgent => accountType.toUpperCase() == 'AGENT';
+  bool get isClient => accountType.toUpperCase() == 'CLIENT';
 
   String get fullName {
     final parts = [firstName, lastName].where((p) => p.trim().isNotEmpty);
@@ -40,6 +48,7 @@ class AuthUser extends Equatable {
       email: email,
       kycStatus: kycStatus,
       isSuspended: isSuspended,
+      accountType: accountType,
       hasPin: hasPin ?? this.hasPin,
     );
   }
@@ -53,6 +62,7 @@ class AuthUser extends Equatable {
         email,
         kycStatus,
         isSuspended,
+        accountType,
         hasPin,
       ];
 }
