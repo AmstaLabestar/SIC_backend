@@ -27,6 +27,11 @@ class ApiConstants {
   static const pinSetup = '/auth/pin/setup/';
   static const pinVerify = '/auth/pin/verify/';
 
+  // Biometrie (authentification par empreinte, schema cle publique + signature)
+  static const biometricRegister = '/auth/biometric/register/';
+  static const biometricLogin = '/auth/biometric/login/';
+  static const biometricDevices = '/auth/biometric/devices/';
+
   // Ressources
   static const puces = '/puces/';
   static const transactions = '/transactions/';

@@ -8,6 +8,7 @@ import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/constants/app_text_styles.dart';
 import '../../../../core/widgets/sic_button.dart';
 import '../providers/auth_provider.dart';
+import '../providers/biometric_provider.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -23,6 +24,36 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   bool _obscure = true;
   bool _submitting = false;
   String? _error;
+  bool _biometricReady = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _initBiometric();
+  }
+
+  /// Affiche le bouton empreinte si la biometrie est disponible ET activee
+  /// (l'agent l'a enrolee depuis son compte).
+  Future<void> _initBiometric() async {
+    final bio = ref.read(biometricRepositoryProvider);
+    final available = await bio.isAvailable();
+    final enabled = available && await bio.isEnabled();
+    if (mounted && enabled) setState(() => _biometricReady = true);
+  }
+
+  Future<void> _loginWithBiometric() async {
+    setState(() {
+      _submitting = true;
+      _error = null;
+    });
+    final error =
+        await ref.read(authControllerProvider.notifier).loginWithBiometric();
+    if (!mounted) return;
+    setState(() {
+      _submitting = false;
+      _error = error;
+    });
+  }
 
   @override
   void dispose() {
@@ -139,6 +170,22 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   isLoading: _submitting,
                   onPressed: _submit,
                 ),
+                if (_biometricReady) ...[
+                  const SizedBox(height: AppSpacing.md),
+                  Center(
+                    child: TextButton.icon(
+                      onPressed: _submitting ? null : _loginWithBiometric,
+                      icon: const Icon(Icons.fingerprint_rounded, size: 24),
+                      label: Text(
+                        'Se connecter avec l\'empreinte',
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
                 const SizedBox(height: AppSpacing.md),
                 Center(
                   child: TextButton(

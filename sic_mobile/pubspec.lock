@@ -41,6 +41,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.13.1"
+  biometric_signature:
+    dependency: "direct main"
+    description:
+      name: biometric_signature
+      sha256: "839c68b6b81ab570b989f78e98c1eaf30e7d5892309d64055d335ff7b11ac4fd"
+      url: "https://pub.dev"
+    source: hosted
+    version: "12.0.1"
   boolean_selector:
     dependency: transitive
     description:
@@ -1013,6 +1021,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.4.0"
+  uuid:
+    dependency: "direct main"
+    description:
+      name: uuid
+      sha256: "1fef9e8e11e2991bb773070d4656b7bd5d850967a2456cfc83cf47925ba79489"
+      url: "https://pub.dev"
+    source: hosted
+    version: "4.5.3"
   vector_math:
     dependency: transitive
     description:

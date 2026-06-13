@@ -8,6 +8,7 @@ import '../../data/repositories/auth_repository_impl.dart';
 import '../../domain/entities/auth_user.dart';
 import '../../domain/repositories/auth_repository.dart';
 import 'app_lock_provider.dart';
+import 'biometric_provider.dart';
 
 final authRemoteDatasourceProvider = Provider<AuthRemoteDatasource>((ref) {
   return AuthRemoteDatasource(ref.watch(dioProvider));
@@ -130,6 +131,35 @@ class AuthController extends AsyncNotifier<AuthUser?> {
     return result.fold(
       (failure) => (error: failure.message, token: null),
       (token) => (error: null, token: token),
+    );
+  }
+
+  /// Connexion par empreinte (palier P1). Les jetons sont persistes par le
+  /// repository biometrique ; on charge ensuite le profil comme un login
+  /// classique. Retourne un message d'erreur, ou `null` si succes.
+  Future<String?> loginWithBiometric() async {
+    final bio = ref.read(biometricRepositoryProvider);
+    final result = await bio.loginWithBiometric();
+    return result.fold(
+      (failure) async {
+        state = const AsyncValue.data(null);
+        return failure.message;
+      },
+      (_) async {
+        final profile = await ref.read(authRepositoryProvider).getProfile();
+        return profile.fold(
+          (failure) {
+            state = const AsyncValue.data(null);
+            return failure.message;
+          },
+          (user) {
+            _invalidateUserData();
+            ref.read(appLockProvider.notifier).unlock();
+            state = AsyncValue.data(user);
+            return null;
+          },
+        );
+      },
     );
   }
 
