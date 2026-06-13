@@ -23,12 +23,14 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         agent = getattr(user, 'agent_profile', None)
         if agent:
             token['agent_id'] = str(agent.id)
+            token['account_type'] = agent.account_type
             token['kyc_status'] = agent.kyc_status
             token['first_name'] = agent.first_name or ''
             token['phone_number'] = agent.phone_number
             token['has_pin'] = agent.pin_code is not None
         else:
             token['agent_id'] = None
+            token['account_type'] = None
             token['kyc_status'] = None
             token['first_name'] = user.first_name or user.username
             token['has_pin'] = False
@@ -159,11 +161,18 @@ class RegisterSerializer(serializers.ModelSerializer):
     )
     first_name = serializers.CharField(required=False, max_length=100, allow_blank=True)
     last_name = serializers.CharField(required=False, max_length=100, allow_blank=True)
+    # Type de compte choisi a l'inscription. Defaut AGENT (l'app mobile actuelle
+    # est orientee agent ; le choix de role cote UI viendra avec le lot D1).
+    account_type = serializers.ChoiceField(
+        choices=Agent.ACCOUNT_TYPE_CHOICES,
+        required=False,
+        default=Agent.ACCOUNT_AGENT,
+    )
 
     class Meta:
         model = User
         fields = ['username', 'email', 'password', 'password_confirm',
-                  'phone_number', 'first_name', 'last_name']
+                  'phone_number', 'first_name', 'last_name', 'account_type']
 
     def validate_username(self, value):
         value = value.lower().strip()
@@ -225,6 +234,7 @@ class RegisterSerializer(serializers.ModelSerializer):
         phone_number = validated_data.pop('phone_number')
         first_name = validated_data.pop('first_name', '')
         last_name = validated_data.pop('last_name', '')
+        account_type = validated_data.pop('account_type', Agent.ACCOUNT_AGENT)
         validated_data.pop('password_confirm')  # Supprimer la confirmation
 
         # Créer l'utilisateur
@@ -236,27 +246,30 @@ class RegisterSerializer(serializers.ModelSerializer):
             last_name=last_name
         )
 
-        # Créer le profil agent
+        # Créer le profil (agent ou client)
         agent = Agent.objects.create(
             user=user,
+            account_type=account_type,
             phone_number=phone_number,
             first_name=first_name,
             last_name=last_name,
             kyc_status='PENDING'  # Par défaut en attente de validation KYC
         )
 
-        # Le numéro d'inscription devient la première puce de l'agent
-        # (opérateur déduit du préfixe).
-        from api.services.compensation_engine import TransactionValidator
-        operator = TransactionValidator.operator_for_number(phone_number)
-        if operator:
-            Puce.objects.create(
-                agent=agent,
-                operator=operator,
-                phone_number=phone_number,
-                balance=0,
-                is_active=True,
-            )
+        # Seul un AGENT possède des puces (float). Pour un agent, le numéro
+        # d'inscription devient la première puce (opérateur déduit du préfixe).
+        # Un CLIENT n'a pas de puce (modèle overlay : il paie via CinetPay).
+        if account_type == Agent.ACCOUNT_AGENT:
+            from api.services.compensation_engine import TransactionValidator
+            operator = TransactionValidator.operator_for_number(phone_number)
+            if operator:
+                Puce.objects.create(
+                    agent=agent,
+                    operator=operator,
+                    phone_number=phone_number,
+                    balance=0,
+                    is_active=True,
+                )
 
         return user
 
@@ -568,7 +581,7 @@ class AgentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Agent
         fields = [
-            'id', 'username', 'email',
+            'id', 'username', 'email', 'account_type',
             'phone_number', 'first_name', 'last_name',
             'kyc_status',
             'is_suspended', 'puces',

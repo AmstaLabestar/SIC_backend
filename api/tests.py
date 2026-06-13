@@ -469,6 +469,37 @@ class RegisterSerializerTest(TestCase):
         self.assertFalse(dup.is_valid())
         self.assertIn('phone_number', dup.errors)
 
+    # --- C1 : types de compte ---------------------------------------------
+
+    def test_register_defaut_agent(self):
+        """Sans account_type, le compte est un AGENT (compat ascendante)."""
+        from api.serializers import RegisterSerializer
+        s = RegisterSerializer(data=self._data('agentdef', '70222555'))
+        self.assertTrue(s.is_valid(), s.errors)
+        agent = s.save().agent_profile
+        self.assertEqual(agent.account_type, Agent.ACCOUNT_AGENT)
+        self.assertEqual(agent.puces.count(), 1)
+
+    def test_register_client_sans_puce(self):
+        """Un CLIENT n'a pas de puce (modèle overlay)."""
+        from api.serializers import RegisterSerializer
+        data = {**self._data('clientun', '70222666'), 'account_type': 'CLIENT'}
+        s = RegisterSerializer(data=data)
+        self.assertTrue(s.is_valid(), s.errors)
+        agent = s.save().agent_profile
+        self.assertEqual(agent.account_type, Agent.ACCOUNT_CLIENT)
+        self.assertEqual(agent.puces.count(), 0)
+
+    def test_token_expose_account_type(self):
+        """Le JWT porte account_type (pour le routage de rôle côté app)."""
+        from api.serializers import RegisterSerializer, CustomTokenObtainPairSerializer
+        data = {**self._data('clientdeux', '70222777'), 'account_type': 'CLIENT'}
+        s = RegisterSerializer(data=data)
+        self.assertTrue(s.is_valid(), s.errors)
+        user = s.save()
+        token = CustomTokenObtainPairSerializer.get_token(user)
+        self.assertEqual(token['account_type'], 'CLIENT')
+
 
 class PuceGlobalUniquenessTest(APITestCase):
     """Un numéro de puce ne peut appartenir qu'à un seul agent (fintech)."""

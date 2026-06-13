@@ -5,8 +5,21 @@ from django.contrib.auth.hashers import make_password, check_password
 
 
 class Agent(models.Model):
+    # Type de compte : AGENT (PDV : float multi-puces, compensation, commission)
+    # ou CLIENT (grand public : transfert/recharge, pas de puce). Defaut AGENT
+    # pour compatibilite ascendante (toutes les lignes existantes sont des agents).
+    ACCOUNT_AGENT = 'AGENT'
+    ACCOUNT_CLIENT = 'CLIENT'
+    ACCOUNT_TYPE_CHOICES = [
+        (ACCOUNT_AGENT, 'Agent'),
+        (ACCOUNT_CLIENT, 'Client'),
+    ]
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='agent_profile')
+    account_type = models.CharField(
+        max_length=10, choices=ACCOUNT_TYPE_CHOICES, default=ACCOUNT_AGENT
+    )
     phone_number = models.CharField(max_length=20, unique=True)
     first_name = models.CharField(max_length=100, null=True, blank=True)
     last_name = models.CharField(max_length=100, null=True, blank=True)
@@ -93,7 +106,10 @@ class Transaction(models.Model):
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     commission_sic = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
     agent_benefit = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
-    
+    # Frais factures au client (compte CLIENT). Les agents gagnent une commission
+    # (agent_benefit) ; les clients paient des frais (fee). Defaut 0.
+    fee = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
+
     is_compensated = models.BooleanField(default=False)
     
     created_at = models.DateTimeField(auto_now_add=True)

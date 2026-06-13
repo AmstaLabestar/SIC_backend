@@ -7,6 +7,7 @@ import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/constants/app_text_styles.dart';
 import '../providers/app_lock_provider.dart';
 import '../providers/auth_provider.dart';
+import '../providers/biometric_provider.dart';
 import '../widgets/pin_header.dart';
 import '../widgets/pin_keypad.dart';
 
@@ -29,6 +30,34 @@ class _LockScreenState extends ConsumerState<LockScreen> {
   bool _error = false;
   bool _verifying = false;
   String? _message;
+  bool _biometricReady = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _initBiometric();
+  }
+
+  /// Si la biometrie est disponible ET activee, on l'affiche et on la propose
+  /// automatiquement (palier P2 : deverrouillage privilegie, PIN en secours).
+  Future<void> _initBiometric() async {
+    final bio = ref.read(biometricRepositoryProvider);
+    final available = await bio.isAvailable();
+    final enabled = available && await bio.isEnabled();
+    if (!mounted || !enabled) return;
+    setState(() => _biometricReady = true);
+    _unlockWithBiometric();
+  }
+
+  Future<void> _unlockWithBiometric() async {
+    if (_verifying) return;
+    final ok = await ref.read(biometricRepositoryProvider).unlock();
+    if (!mounted) return;
+    if (ok) {
+      // Succes : la garde de route redirige automatiquement vers /dashboard.
+      ref.read(appLockProvider.notifier).unlock();
+    }
+  }
 
   void _onDigit(String d) {
     if (_verifying || _pin.length >= _pinLength) return;
@@ -121,6 +150,16 @@ class _LockScreenState extends ConsumerState<LockScreen> {
                           enabled: !_verifying,
                         ),
                       ),
+                      if (_biometricReady)
+                        TextButton.icon(
+                          onPressed: _verifying ? null : _unlockWithBiometric,
+                          icon: const Icon(Icons.fingerprint_rounded, size: 22),
+                          label: Text(
+                            'Deverrouiller avec l\'empreinte',
+                            style: AppTextStyles.caption
+                                .copyWith(color: AppColors.primary),
+                          ),
+                        ),
                       TextButton.icon(
                         onPressed: _verifying ? null : _logout,
                         icon: const Icon(Icons.logout_rounded, size: 18),

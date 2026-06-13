@@ -1,5 +1,7 @@
 package com.example.myfirstapp
 
-import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterFragmentActivity
 
-class MainActivity : FlutterActivity()
+// FlutterFragmentActivity (et non FlutterActivity) est requis par
+// biometric_signature / local_auth pour afficher le BiometricPrompt.
+class MainActivity : FlutterFragmentActivity()

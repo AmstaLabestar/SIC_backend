@@ -29,6 +29,9 @@ class AuthInterceptor extends QueuedInterceptor {
     ApiConstants.register,
     ApiConstants.refresh,
     ApiConstants.health,
+    // Login biometrique : pas de token a injecter, et un 401 = signature
+    // invalide (metier) -> ne pas tenter de refresh ni rejouer la requete.
+    ApiConstants.biometricLogin,
   };
 
   /// Endpoints ou un 401 est metier (pas une session expiree) : il ne faut NI
