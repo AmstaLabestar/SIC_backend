@@ -211,11 +211,18 @@ class RegisterSerializer(serializers.ModelSerializer):
     )
     # Code OTP reçu par email, à vérifier avant la création du compte (lot A2).
     otp = serializers.CharField(write_only=True, required=True, max_length=6)
+    # Appareil d'inscription (lot A4) : approuvé d'office comme appareil de
+    # confiance puisque l'email vient d'être vérifié par OTP. Optionnel.
+    device_id = serializers.CharField(
+        write_only=True, required=False, allow_blank=True, max_length=255)
+    device_name = serializers.CharField(
+        write_only=True, required=False, allow_blank=True, default='', max_length=100)
 
     class Meta:
         model = User
         fields = ['username', 'email', 'password', 'password_confirm',
-                  'phone_number', 'first_name', 'last_name', 'account_type', 'otp']
+                  'phone_number', 'first_name', 'last_name', 'account_type',
+                  'otp', 'device_id', 'device_name']
 
     def validate_username(self, value):
         value = value.lower().strip()
@@ -279,6 +286,8 @@ class RegisterSerializer(serializers.ModelSerializer):
         last_name = validated_data.pop('last_name', '')
         account_type = validated_data.pop('account_type', Agent.ACCOUNT_AGENT)
         otp_code = validated_data.pop('otp', '')
+        device_id = (validated_data.pop('device_id', '') or '').strip()
+        device_name = (validated_data.pop('device_name', '') or '').strip()
         validated_data.pop('password_confirm')  # Supprimer la confirmation
 
         # Vérifier l'OTP email AVANT de créer le compte (lot A2).
@@ -320,6 +329,18 @@ class RegisterSerializer(serializers.ModelSerializer):
                     balance=0,
                     is_active=True,
                 )
+
+        # Appareil d'inscription = appareil de confiance (lot A4). L'email a été
+        # vérifié par OTP juste avant : pas besoin d'une 2e vérification au
+        # premier login depuis ce téléphone.
+        if device_id:
+            from django.utils import timezone
+            from core.models import TrustedDevice
+            TrustedDevice.objects.get_or_create(
+                agent=agent,
+                device_id=device_id,
+                defaults={'device_name': device_name, 'last_used_at': timezone.now()},
+            )
 
         return user
 

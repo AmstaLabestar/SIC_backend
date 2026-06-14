@@ -685,6 +685,8 @@ class LoginByPhoneTest(APITestCase):
     """
 
     def setUp(self):
+        from django.core.cache import cache
+        cache.clear()  # repartir d'un compteur de throttle 'login' propre
         self.user = User.objects.create_user(
             'phoneagent', 'phone@test.com', 'Passw0rd123'
         )
@@ -720,3 +722,90 @@ class LoginByPhoneTest(APITestCase):
             'phone_number': '70112233', 'password': 'wrong',
         })
         self.assertEqual(resp.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+@override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
+class DeviceBindingTest(APITestCase):
+    """Lot A4 : liaison appareil + vérification OTP des nouveaux appareils."""
+
+    def setUp(self):
+        from django.core.cache import cache
+        from core.models import TrustedDevice, EmailOtp  # noqa: F401
+        cache.clear()  # compteur de throttle 'login' propre par test
+        self.user = User.objects.create_user(
+            'devuser', 'dev@test.com', 'Passw0rd123'
+        )
+        self.agent = Agent.objects.create(
+            user=self.user, phone_number='70123400',
+            first_name='D', last_name='V', kyc_status='PENDING',
+        )
+
+    def _login(self, device_id='dev-A', password='Passw0rd123'):
+        return self.client.post('/api/auth/login/', {
+            'phone_number': '70123400', 'password': password,
+            'device_id': device_id, 'device_name': 'Test',
+        })
+
+    def test_premier_appareil_approuve_automatiquement(self):
+        from core.models import TrustedDevice
+        resp = self._login(device_id='dev-A')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertIn('access', resp.data)
+        self.assertTrue(
+            TrustedDevice.objects.filter(agent=self.agent, device_id='dev-A').exists()
+        )
+
+    def test_appareil_connu_reconnecte_sans_otp(self):
+        self._login(device_id='dev-A')  # enrôle dev-A
+        resp = self._login(device_id='dev-A')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertIn('access', resp.data)
+
+    def test_nouvel_appareil_exige_otp(self):
+        from core.models import EmailOtp
+        self._login(device_id='dev-A')  # 1er appareil de confiance
+        resp = self._login(device_id='dev-B')  # nouvel appareil
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertTrue(resp.data.get('device_verification_required'))
+        self.assertIn('@', resp.data.get('email', ''))
+        # Un OTP 'device' a bien été généré
+        self.assertTrue(
+            EmailOtp.objects.filter(
+                email='dev@test.com', purpose=EmailOtp.PURPOSE_DEVICE, is_used=False
+            ).exists()
+        )
+
+    def test_login_sans_device_id_reste_legacy(self):
+        """Pas de device_id (web/admin) -> jetons émis, pas de binding."""
+        resp = self.client.post('/api/auth/login/', {
+            'phone_number': '70123400', 'password': 'Passw0rd123',
+        })
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertIn('access', resp.data)
+
+    def test_verify_device_avec_bon_otp_emet_jetons(self):
+        from core.models import EmailOtp, TrustedDevice
+        self._login(device_id='dev-A')
+        self._login(device_id='dev-B')  # déclenche l'OTP
+        otp = EmailOtp.objects.filter(
+            email='dev@test.com', purpose=EmailOtp.PURPOSE_DEVICE, is_used=False
+        ).latest('created_at')
+        resp = self.client.post('/api/auth/device/verify/', {
+            'phone_number': '70123400', 'password': 'Passw0rd123',
+            'device_id': 'dev-B', 'device_name': 'Test', 'otp': otp.code,
+        })
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertIn('access', resp.data)
+        self.assertTrue(
+            TrustedDevice.objects.filter(agent=self.agent, device_id='dev-B').exists()
+        )
+
+    def test_verify_device_mauvais_otp_refuse(self):
+        self._login(device_id='dev-A')
+        self._login(device_id='dev-B')
+        resp = self.client.post('/api/auth/device/verify/', {
+            'phone_number': '70123400', 'password': 'Passw0rd123',
+            'device_id': 'dev-B', 'device_name': 'Test', 'otp': '000000',
+        })
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('otp', resp.data)

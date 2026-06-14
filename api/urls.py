@@ -10,7 +10,7 @@ from rest_framework_simplejwt.views import (
 from .views import (
     TransactionViewSet, PuceViewSet, AgentProfileView, AccountLimitsView,
     RegisterView, OtpSendView, CommissionInfoView, HealthCheckView,
-    CustomTokenObtainPairView, LogoutView,
+    CustomTokenObtainPairView, DeviceVerifyView, LogoutView,
     PinSetupView, PinVerifyView,
     BiometricRegisterView, BiometricLoginView, BiometricDeviceListView
 )
@@ -24,6 +24,7 @@ urlpatterns = [
     path('auth/register/', RegisterView.as_view(), name='register'),
     path('auth/otp/send/', OtpSendView.as_view(), name='otp_send'),
     path('auth/login/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('auth/device/verify/', DeviceVerifyView.as_view(), name='device_verify'),
     path('auth/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('auth/verify/', TokenVerifyView.as_view(), name='token_verify'),
     path('auth/logout/', LogoutView.as_view(), name='logout'),

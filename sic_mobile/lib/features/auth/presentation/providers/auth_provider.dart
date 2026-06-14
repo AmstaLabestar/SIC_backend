@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/errors/failures.dart';
 import '../../../../core/network/network_providers.dart';
 import '../../../dashboard/presentation/providers/dashboard_provider.dart';
 import '../../../transactions/presentation/providers/transaction_providers.dart';
@@ -42,8 +43,15 @@ class AuthController extends AsyncNotifier<AuthUser?> {
     }
   }
 
-  /// Retourne un message d'erreur en cas d'echec, `null` si succes.
-  Future<String?> login(String username, String password) async {
+  /// Connexion. Retourne `(error, deviceEmail)` :
+  /// - `error` non nul -> echec a afficher ;
+  /// - `deviceEmail` non nul -> nouvel appareil (lot A4) : rediriger vers la
+  ///   verification OTP appareil (l'email masque est fourni) ;
+  /// - les deux nuls -> connexion reussie.
+  Future<({String? error, String? deviceEmail})> login(
+    String username,
+    String password,
+  ) async {
     // On ne passe pas l'etat en `loading` ici : le bouton gere son propre
     // spinner, et l'etat global doit rester "deconnecte" pour que la garde de
     // route maintienne l'ecran de login (pas de flash vers le splash).
@@ -52,19 +60,52 @@ class AuthController extends AsyncNotifier<AuthUser?> {
     return result.fold(
       (failure) {
         state = const AsyncValue.data(null);
+        if (failure is DeviceVerificationFailure) {
+          return (error: null, deviceEmail: failure.email);
+        }
+        return (error: failure.message, deviceEmail: null);
+      },
+      (user) {
+        _onAuthenticated(user);
+        return (error: null, deviceEmail: null);
+      },
+    );
+  }
+
+  /// Verifie un nouvel appareil par OTP email puis connecte (lot A4).
+  /// Retourne un message d'erreur, ou `null` si succes.
+  Future<String?> verifyDevice({
+    required String identifier,
+    required String password,
+    required String otp,
+  }) async {
+    final repo = ref.read(authRepositoryProvider);
+    final result = await repo.verifyDevice(
+      identifier: identifier,
+      password: password,
+      otp: otp,
+    );
+    return result.fold(
+      (failure) {
+        state = const AsyncValue.data(null);
         return failure.message;
       },
       (user) {
-        // Nouvel utilisateur connecte : on purge les donnees de l'eventuel
-        // compte precedent (dashboard, historique) pour eviter un affichage
-        // perime.
-        _invalidateUserData();
-        // L'agent vient de saisir ses identifiants -> app deverrouillee.
-        ref.read(appLockProvider.notifier).unlock();
-        state = AsyncValue.data(user);
+        _onAuthenticated(user);
         return null;
       },
     );
+  }
+
+  /// Finalise une connexion reussie : purge les donnees de l'ancien compte,
+  /// deverrouille l'app et publie l'utilisateur.
+  void _onAuthenticated(AuthUser user) {
+    // Nouvel utilisateur connecte : on purge les donnees de l'eventuel compte
+    // precedent (dashboard, historique) pour eviter un affichage perime.
+    _invalidateUserData();
+    // L'agent vient de saisir ses identifiants -> app deverrouillee.
+    ref.read(appLockProvider.notifier).unlock();
+    state = AsyncValue.data(user);
   }
 
   /// Reinitialise les providers de donnees liees a l'utilisateur courant.

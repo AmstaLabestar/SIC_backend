@@ -6,6 +6,7 @@ import '../../features/account/presentation/screens/account_screen.dart';
 import '../../features/alerts/presentation/screens/alerts_screen.dart';
 import '../../features/auth/presentation/providers/app_lock_provider.dart';
 import '../../features/auth/presentation/providers/auth_provider.dart';
+import '../../features/auth/presentation/screens/device_verify_screen.dart';
 import '../../features/auth/presentation/screens/lock_screen.dart';
 import '../../features/auth/presentation/screens/login_screen.dart';
 import '../../features/auth/presentation/screens/pin_setup_screen.dart';
@@ -47,9 +48,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           location == '/splash';
 
       if (!isLoggedIn) {
-        return (location == '/login' || location == '/register')
-            ? null
-            : '/login';
+        const loggedOutOk = {'/login', '/register', '/verify-device'};
+        return loggedOutOk.contains(location) ? null : '/login';
       }
       // Connecte mais sans code PIN -> creation obligatoire avant tout acces.
       if (!user.hasPin) {
@@ -80,6 +80,17 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/register',
         builder: (context, state) => const RegisterScreen(),
+      ),
+      GoRoute(
+        path: '/verify-device',
+        builder: (context, state) {
+          final extra = (state.extra as Map?) ?? const {};
+          return DeviceVerifyScreen(
+            identifier: (extra['identifier'] as String?) ?? '',
+            password: (extra['password'] as String?) ?? '',
+            email: (extra['email'] as String?) ?? '',
+          );
+        },
       ),
       GoRoute(
         path: '/pin-setup',

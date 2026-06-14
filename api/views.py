@@ -29,7 +29,10 @@ from .services.compensation_engine import (
     CompensationEngine, CommissionCalculator, TransactionValidator
 )
 from .services.limits import LimitsEngine
-from core.models import Transaction, CompensationDetail, Puce, Agent, BiometricDevice
+from core.models import (
+    Transaction, CompensationDetail, Puce, Agent, BiometricDevice, TrustedDevice,
+    EmailOtp
+)
 from core.tasks import check_transaction_timeout
 from core.utils import log_activity
 
@@ -764,12 +767,42 @@ class HealthCheckView(generics.GenericAPIView):
 # AUTHENTIFICATION AVANCÉE - Logout, PIN, Biométrie
 # =============================================================================
 
+def _mask_email(email):
+    """Masque un email pour l'afficher sans le révéler entièrement.
+    ex: jean.dupont@gmail.com -> j***t@gmail.com"""
+    email = (email or '').strip()
+    if '@' not in email:
+        return email
+    local, _, domain = email.partition('@')
+    if len(local) <= 2:
+        masked = local[:1] + '*'
+    else:
+        masked = f'{local[0]}***{local[-1]}'
+    return f'{masked}@{domain}'
+
+
+def _mark_device_trusted(agent, device_id, device_name=''):
+    """Crée ou rafraîchit un appareil de confiance pour [agent]."""
+    TrustedDevice.objects.update_or_create(
+        agent=agent,
+        device_id=device_id,
+        defaults={'device_name': device_name or '', 'last_used_at': timezone.now()},
+    )
+
+
 class CustomTokenObtainPairView(generics.GenericAPIView):
     """
     Login avec JWT custom (ajoute agent_id, kyc_status, etc. dans le token).
 
     POST /api/auth/login/
-    {"username": "...", "password": "..."}
+    {"phone_number": "...", "password": "...", "device_id": "...", "device_name": "..."}
+
+    Device binding (lot A4) : si `device_id` est fourni et inconnu pour ce compte
+    (alors que d'autres appareils sont déjà de confiance), la connexion est
+    refusée (403 `device_verification_required`) et un OTP est envoyé par email.
+    Le client confirme via /auth/device/verify/. Le premier appareil d'un compte
+    est approuvé automatiquement. `device_id` absent → comportement hérité (pas
+    de binding) pour ne pas casser les clients web/admin existants.
     """
     permission_classes = [AllowAny]
     throttle_classes = [LoginRateThrottle]
@@ -778,9 +811,100 @@ class CustomTokenObtainPairView(generics.GenericAPIView):
     def post(self, request, *args, **kwargs):
         from .serializers import CustomTokenObtainPairSerializer
         serializer = CustomTokenObtainPairSerializer(data=request.data)
-        if serializer.is_valid():
-            return Response(serializer.validated_data, status=status.HTTP_200_OK)
-        return Response(serializer.errors, status=status.HTTP_401_UNAUTHORIZED)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_401_UNAUTHORIZED)
+
+        user = serializer.user
+        agent = getattr(user, 'agent_profile', None)
+        device_id = (request.data.get('device_id') or '').strip()
+        device_name = (request.data.get('device_name') or '').strip()
+
+        if agent and device_id:
+            trusted = TrustedDevice.objects.filter(
+                agent=agent, device_id=device_id
+            ).first()
+            if trusted:
+                trusted.last_used_at = timezone.now()
+                trusted.save(update_fields=['last_used_at'])
+            else:
+                # Le tout premier appareil (aucun device de confiance ni
+                # biométrique) est approuvé d'office : c'est l'appareil
+                # d'enrôlement. Les suivants exigent une vérification OTP.
+                has_devices = (
+                    TrustedDevice.objects.filter(agent=agent).exists()
+                    or BiometricDevice.objects.filter(
+                        agent=agent, is_active=True
+                    ).exists()
+                )
+                if not has_devices:
+                    _mark_device_trusted(agent, device_id, device_name)
+                else:
+                    from .services.otp import generate_and_send
+                    generate_and_send(user.email, EmailOtp.PURPOSE_DEVICE)
+                    log_activity(
+                        user=user, agent=agent,
+                        action="DEVICE_VERIFICATION_REQUIRED",
+                        description=f"Nouvel appareil détecté pour {user.username}.",
+                        level="WARNING",
+                        ip_address=request.META.get('REMOTE_ADDR'),
+                    )
+                    return Response({
+                        'device_verification_required': True,
+                        'detail': "Nouvel appareil détecté. Un code de "
+                                  "vérification a été envoyé à votre email.",
+                        'email': _mask_email(user.email),
+                    }, status=status.HTTP_403_FORBIDDEN)
+
+        return Response(serializer.validated_data, status=status.HTTP_200_OK)
+
+
+class DeviceVerifyView(generics.GenericAPIView):
+    """
+    Vérifie un nouvel appareil par OTP email puis émet les jetons (lot A4).
+
+    POST /api/auth/device/verify/
+    {"phone_number": "...", "password": "...", "device_id": "...",
+     "device_name": "...", "otp": "123456"}
+
+    Re-vérifie les identifiants (l'OTP seul ne suffit pas), valide le code reçu
+    par email, marque l'appareil de confiance et renvoie access/refresh.
+    """
+    permission_classes = [AllowAny]
+    throttle_classes = [LoginRateThrottle]
+    throttle_scope = 'login'
+
+    def post(self, request, *args, **kwargs):
+        from .serializers import CustomTokenObtainPairSerializer
+        serializer = CustomTokenObtainPairSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_401_UNAUTHORIZED)
+
+        user = serializer.user
+        agent = getattr(user, 'agent_profile', None)
+        device_id = (request.data.get('device_id') or '').strip()
+        device_name = (request.data.get('device_name') or '').strip()
+        otp = (request.data.get('otp') or '').strip()
+
+        if not agent or not device_id:
+            return Response(
+                {'error': "Appareil ou profil manquant."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        from .services.otp import verify as verify_otp
+        ok, msg = verify_otp(user.email, otp, EmailOtp.PURPOSE_DEVICE)
+        if not ok:
+            return Response({'otp': [msg]}, status=status.HTTP_400_BAD_REQUEST)
+
+        _mark_device_trusted(agent, device_id, device_name)
+        log_activity(
+            user=user, agent=agent,
+            action="DEVICE_TRUSTED",
+            description=f"Nouvel appareil vérifié pour {user.username}.",
+            level="SUCCESS",
+            ip_address=request.META.get('REMOTE_ADDR'),
+        )
+        return Response(serializer.validated_data, status=status.HTTP_200_OK)
 
 
 class LogoutView(generics.GenericAPIView):
@@ -1015,6 +1139,7 @@ class BiometricRegisterView(generics.GenericAPIView):
             existing.device_name = serializer.validated_data.get('device_name', '')
             existing.is_active = True
             existing.save()
+            _mark_device_trusted(agent, device_id, existing.device_name)
 
             log_activity(
                 agent=agent,
@@ -1043,6 +1168,12 @@ class BiometricRegisterView(generics.GenericAPIView):
             device_name=serializer.validated_data.get('device_name', ''),
             public_key=serializer.validated_data['public_key'],
             is_active=True
+        )
+
+        # Un appareil biométrique enrôlé (depuis une session authentifiée) est
+        # aussi un appareil de confiance pour le login par mot de passe (A4).
+        _mark_device_trusted(
+            agent, device_id, serializer.validated_data.get('device_name', '')
         )
 
         log_activity(

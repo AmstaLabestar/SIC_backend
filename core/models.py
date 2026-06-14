@@ -79,6 +79,32 @@ class BiometricDevice(models.Model):
         return f"{self.agent.first_name} - {self.device_name or self.device_id[:12]}"
 
 
+class TrustedDevice(models.Model):
+    """Appareil de confiance lié à un compte (lot A4 — device binding).
+
+    Défense contre le SIM-swap : même avec les bons identifiants, un **nouvel**
+    appareil doit être vérifié par OTP email (canal distinct du numéro) avant de
+    pouvoir se connecter. Le premier appareil d'un compte est approuvé
+    automatiquement (enrôlement), les suivants exigent l'OTP.
+
+    Distinct de `BiometricDevice` (qui porte une clé publique pour la signature) :
+    un appareil peut être de confiance sans biométrie activée. Un appareil
+    biométrique enrôlé est aussi marqué de confiance.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    agent = models.ForeignKey(Agent, on_delete=models.CASCADE, related_name='trusted_devices')
+    device_id = models.CharField(max_length=255)
+    device_name = models.CharField(max_length=100, blank=True, default='')
+    last_used_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('agent', 'device_id')
+
+    def __str__(self):
+        return f"{self.agent.first_name} - {self.device_name or self.device_id[:12]}"
+
+
 class Puce(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     agent = models.ForeignKey(Agent, on_delete=models.CASCADE, related_name='puces')
@@ -189,6 +215,7 @@ class EmailOtp(models.Model):
     """
     PURPOSE_REGISTER = 'register'
     PURPOSE_RESET = 'reset'
+    PURPOSE_DEVICE = 'device'  # vérification d'un nouvel appareil (lot A4)
     MAX_ATTEMPTS = 5
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

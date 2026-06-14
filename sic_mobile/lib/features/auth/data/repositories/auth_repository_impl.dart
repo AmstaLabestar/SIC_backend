@@ -1,3 +1,5 @@
+import 'dart:io' show Platform;
+
 import 'package:dartz/dartz.dart';
 import 'package:dio/dio.dart';
 
@@ -15,13 +17,22 @@ class AuthRepositoryImpl implements AuthRepository {
   final AuthRemoteDatasource _datasource;
   final TokenStorage _storage;
 
+  /// Nom lisible de l'appareil (affiche dans la liste des appareils de confiance).
+  String get _deviceName => Platform.operatingSystem;
+
   @override
   Future<Either<Failure, AuthUser>> login(
     String username,
     String password,
   ) async {
     try {
-      final tokens = await _datasource.login(username, password);
+      final deviceId = await _storage.getOrCreateDeviceId();
+      final tokens = await _datasource.login(
+        username,
+        password,
+        deviceId: deviceId,
+        deviceName: _deviceName,
+      );
       await _storage.saveTokens(
         access: tokens.access,
         refresh: tokens.refresh,
@@ -29,6 +40,15 @@ class AuthRepositoryImpl implements AuthRepository {
       final profile = await _datasource.getProfile();
       return Right(profile.copyWith(hasPin: jwtHasPin(tokens.access)));
     } catch (error) {
+      // Nouvel appareil (lot A4) : le backend renvoie 403 + un OTP par email.
+      if (error is DioException && error.response?.statusCode == 403) {
+        final data = error.response?.data;
+        if (data is Map && data['device_verification_required'] == true) {
+          return Left(
+            DeviceVerificationFailure((data['email'] as String?) ?? ''),
+          );
+        }
+      }
       // Sur le login, un 401 signifie "identifiants incorrects",
       // pas "session expiree".
       if (error is DioException && error.response?.statusCode == 401) {
@@ -37,6 +57,49 @@ class AuthRepositoryImpl implements AuthRepository {
             'Identifiants incorrects. Verifiez votre identifiant et votre mot de passe.',
           ),
         );
+      }
+      return Left(mapDioErrorToFailure(error));
+    }
+  }
+
+  @override
+  Future<Either<Failure, AuthUser>> verifyDevice({
+    required String identifier,
+    required String password,
+    required String otp,
+  }) async {
+    try {
+      final deviceId = await _storage.getOrCreateDeviceId();
+      final tokens = await _datasource.verifyDevice(
+        identifier: identifier,
+        password: password,
+        otp: otp,
+        deviceId: deviceId,
+        deviceName: _deviceName,
+      );
+      await _storage.saveTokens(
+        access: tokens.access,
+        refresh: tokens.refresh,
+      );
+      final profile = await _datasource.getProfile();
+      return Right(profile.copyWith(hasPin: jwtHasPin(tokens.access)));
+    } catch (error) {
+      if (error is DioException) {
+        final code = error.response?.statusCode;
+        if (code == 400) {
+          // OTP invalide : le backend renvoie {'otp': ['...']}.
+          final data = error.response?.data;
+          String? msg;
+          if (data is Map && data['otp'] is List && (data['otp'] as List).isNotEmpty) {
+            msg = (data['otp'] as List).first.toString();
+          }
+          return Left(ValidationFailure(msg ?? 'Code de verification invalide.'));
+        }
+        if (code == 401) {
+          return const Left(
+            ValidationFailure('Identifiants incorrects.'),
+          );
+        }
       }
       return Left(mapDioErrorToFailure(error));
     }

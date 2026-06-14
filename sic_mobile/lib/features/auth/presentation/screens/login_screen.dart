@@ -72,19 +72,29 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     });
     HapticFeedback.selectionClick();
 
-    final error = await ref.read(authControllerProvider.notifier).login(
-          // Identifiant = numero de telephone (lot A3). On normalise en
-          // minuscules pour le repli username (comptes existants/demo) ; sans
-          // effet sur les chiffres d'un numero.
-          _identifierController.text.trim().toLowerCase(),
-          _passwordController.text,
-        );
+    // Identifiant = numero de telephone (lot A3). On normalise en minuscules
+    // pour le repli username (comptes existants/demo) ; sans effet sur les
+    // chiffres d'un numero.
+    final identifier = _identifierController.text.trim().toLowerCase();
+    final password = _passwordController.text;
+    final result = await ref
+        .read(authControllerProvider.notifier)
+        .login(identifier, password);
 
     if (!mounted) return;
-    setState(() {
-      _submitting = false;
-      _error = error;
-    });
+    setState(() => _submitting = false);
+
+    // Nouvel appareil (lot A4) : aller saisir l'OTP recu par email.
+    if (result.deviceEmail != null) {
+      context.go('/verify-device', extra: {
+        'identifier': identifier,
+        'password': password,
+        'email': result.deviceEmail,
+      });
+      return;
+    }
+
+    setState(() => _error = result.error);
     // En cas de succes, la garde de route redirige vers /dashboard.
   }
 

@@ -20,6 +20,7 @@ class ApiConstants {
 
   // Auth
   static const login = '/auth/login/';
+  static const deviceVerify = '/auth/device/verify/';
   static const register = '/auth/register/';
   static const otpSend = '/auth/otp/send/';
   static const refresh = '/auth/refresh/';

@@ -5,7 +5,16 @@ import '../entities/auth_user.dart';
 
 abstract class AuthRepository {
   /// Authentifie, persiste les tokens et retourne le profil.
+  /// En cas de nouvel appareil (lot A4), retourne `Left(DeviceVerificationFailure)`
+  /// (un OTP a ete envoye par email ; appeler [verifyDevice] ensuite).
   Future<Either<Failure, AuthUser>> login(String username, String password);
+
+  /// Verifie un nouvel appareil par OTP email puis se connecte (lot A4).
+  Future<Either<Failure, AuthUser>> verifyDevice({
+    required String identifier,
+    required String password,
+    required String otp,
+  });
 
   /// Envoie un code OTP de verification a l'email (etape 1 de l'inscription).
   Future<Either<Failure, Unit>> sendOtp(String email);

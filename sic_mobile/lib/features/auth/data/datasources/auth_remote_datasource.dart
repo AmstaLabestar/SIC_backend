@@ -18,10 +18,51 @@ class AuthRemoteDatasource {
   /// Connexion par numero de telephone (identifiant principal v1, lot A3).
   /// Le backend resout le numero vers le compte ; un username reste accepte en
   /// repli (comptes existants / demo), d'ou le nom generique [identifier].
-  Future<AuthTokens> login(String identifier, String password) async {
+  ///
+  /// [deviceId]/[deviceName] : liaison appareil (lot A4). Si l'appareil est
+  /// inconnu pour ce compte, le backend repond 403 `device_verification_required`
+  /// (DioException) et envoie un OTP par email.
+  Future<AuthTokens> login(
+    String identifier,
+    String password, {
+    required String deviceId,
+    String deviceName = '',
+  }) async {
     final response = await _dio.post<Map<String, dynamic>>(
       ApiConstants.login,
-      data: {'phone_number': identifier, 'password': password},
+      data: {
+        'phone_number': identifier,
+        'password': password,
+        'device_id': deviceId,
+        'device_name': deviceName,
+      },
+    );
+    final data = response.data!;
+    return AuthTokens(
+      access: data['access'] as String,
+      refresh: data['refresh'] as String,
+    );
+  }
+
+  /// Verifie un nouvel appareil par OTP email puis recupere les jetons (A4).
+  /// `POST /auth/device/verify/`. Leve une [DioException] : 400 OTP invalide,
+  /// 401 identifiants incorrects.
+  Future<AuthTokens> verifyDevice({
+    required String identifier,
+    required String password,
+    required String otp,
+    required String deviceId,
+    String deviceName = '',
+  }) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      ApiConstants.deviceVerify,
+      data: {
+        'phone_number': identifier,
+        'password': password,
+        'otp': otp,
+        'device_id': deviceId,
+        'device_name': deviceName,
+      },
     );
     final data = response.data!;
     return AuthTokens(

@@ -39,6 +39,14 @@ class _FakeAuthRepository implements AuthRepository {
       const Left(AuthFailure());
 
   @override
+  Future<Either<Failure, AuthUser>> verifyDevice({
+    required String identifier,
+    required String password,
+    required String otp,
+  }) async =>
+      const Left(AuthFailure());
+
+  @override
   Future<Either<Failure, AuthUser>> getProfile() async =>
       const Left(AuthFailure());
 
