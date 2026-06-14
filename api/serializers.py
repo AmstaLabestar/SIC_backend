@@ -14,7 +14,46 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
     """
     JWT custom qui ajoute des claims utiles dans le token.
     Évite un appel /profile/ à chaque requête côté mobile.
+
+    Identifiant de connexion (lot A3) : le **numéro de téléphone** est
+    l'identifiant principal v1. Le client mobile envoie `phone_number` ; on le
+    normalise puis on retrouve le compte correspondant. Le `username` reste
+    accepté en repli (comptes existants, admin, démo) afin de ne rien casser.
     """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Identifiant par téléphone (principal). Username devient optionnel.
+        self.fields['phone_number'] = serializers.CharField(required=False)
+        self.fields[self.username_field].required = False
+
+    @staticmethod
+    def _resolve_username(identifier):
+        """Traduit un identifiant saisi (téléphone OU username) en username.
+
+        Si l'identifiant ressemble à un numéro valide et correspond à un agent,
+        on renvoie le username du compte lié. Sinon on renvoie l'identifiant tel
+        quel (repli username) : `authenticate()` jugera de sa validité.
+        """
+        from api.services.compensation_engine import TransactionValidator
+        try:
+            national = TransactionValidator.validate_phone_number(identifier)
+        except ValueError:
+            return identifier
+        agent = (Agent.objects
+                 .filter(phone_number=national)
+                 .select_related('user')
+                 .first())
+        return agent.user.username if agent else identifier
+
+    def validate(self, attrs):
+        identifier = (attrs.get('phone_number')
+                      or attrs.get(self.username_field) or '').strip()
+        if identifier:
+            attrs[self.username_field] = self._resolve_username(identifier)
+        attrs.pop('phone_number', None)
+        return super().validate(attrs)
+
     @classmethod
     def get_token(cls, user):
         token = super().get_token(user)

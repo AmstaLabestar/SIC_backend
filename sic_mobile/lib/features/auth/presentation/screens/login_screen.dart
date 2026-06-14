@@ -19,7 +19,7 @@ class LoginScreen extends ConsumerStatefulWidget {
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _usernameController = TextEditingController();
+  final _identifierController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _obscure = true;
   bool _submitting = false;
@@ -57,7 +57,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   void dispose() {
-    _usernameController.dispose();
+    _identifierController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
@@ -73,9 +73,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     HapticFeedback.selectionClick();
 
     final error = await ref.read(authControllerProvider.notifier).login(
-          // Le backend stocke les identifiants en minuscules a l'inscription :
-          // on normalise au login pour eviter un faux "identifiants incorrects".
-          _usernameController.text.trim().toLowerCase(),
+          // Identifiant = numero de telephone (lot A3). On normalise en
+          // minuscules pour le repli username (comptes existants/demo) ; sans
+          // effet sur les chiffres d'un numero.
+          _identifierController.text.trim().toLowerCase(),
           _passwordController.text,
         );
 
@@ -127,15 +128,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   style: AppTextStyles.bodyMedium,
                 ),
                 const SizedBox(height: AppSpacing.xl),
-                Text('Identifiant', style: AppTextStyles.microLabel),
+                Text('Numero de telephone', style: AppTextStyles.microLabel),
                 const SizedBox(height: AppSpacing.sm),
                 TextFormField(
-                  controller: _usernameController,
+                  controller: _identifierController,
                   textInputAction: TextInputAction.next,
-                  autofillHints: const [AutofillHints.username],
-                  decoration: const InputDecoration(hintText: 'nom_utilisateur'),
-                  validator: (v) =>
-                      (v == null || v.trim().isEmpty) ? 'Identifiant requis' : null,
+                  keyboardType: TextInputType.phone,
+                  autofillHints: const [AutofillHints.telephoneNumber],
+                  decoration: const InputDecoration(hintText: '70 12 34 56'),
+                  validator: (v) => (v == null || v.trim().isEmpty)
+                      ? 'Numero de telephone requis'
+                      : null,
                 ),
                 const SizedBox(height: AppSpacing.md),
                 Text('Mot de passe', style: AppTextStyles.microLabel),

@@ -15,10 +15,13 @@ class AuthRemoteDatasource {
 
   final Dio _dio;
 
-  Future<AuthTokens> login(String username, String password) async {
+  /// Connexion par numero de telephone (identifiant principal v1, lot A3).
+  /// Le backend resout le numero vers le compte ; un username reste accepte en
+  /// repli (comptes existants / demo), d'ou le nom generique [identifier].
+  Future<AuthTokens> login(String identifier, String password) async {
     final response = await _dio.post<Map<String, dynamic>>(
       ApiConstants.login,
-      data: {'username': username, 'password': password},
+      data: {'phone_number': identifier, 'password': password},
     );
     final data = response.data!;
     return AuthTokens(

@@ -676,3 +676,47 @@ class KycLimitsAPITest(APITestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(resp.data['tier'], 0)
         self.assertEqual(resp.data['per_op'], '200000')
+
+
+class LoginByPhoneTest(APITestCase):
+    """Lot A3 : l'identifiant de connexion est le numéro de téléphone.
+
+    Le username reste accepté en repli (comptes existants / démo).
+    """
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            'phoneagent', 'phone@test.com', 'Passw0rd123'
+        )
+        self.agent = Agent.objects.create(
+            user=self.user, phone_number='70112233',
+            first_name='P', last_name='A', kyc_status='PENDING',
+        )
+
+    def test_login_par_numero_de_telephone(self):
+        resp = self.client.post('/api/auth/login/', {
+            'phone_number': '70112233', 'password': 'Passw0rd123',
+        })
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertIn('access', resp.data)
+
+    def test_login_par_numero_avec_indicatif(self):
+        """Un numéro avec préfixe +226 doit être normalisé et résolu."""
+        resp = self.client.post('/api/auth/login/', {
+            'phone_number': '+22670112233', 'password': 'Passw0rd123',
+        })
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertIn('access', resp.data)
+
+    def test_repli_username_toujours_accepte(self):
+        resp = self.client.post('/api/auth/login/', {
+            'phone_number': 'phoneagent', 'password': 'Passw0rd123',
+        })
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertIn('access', resp.data)
+
+    def test_mauvais_mot_de_passe_refuse(self):
+        resp = self.client.post('/api/auth/login/', {
+            'phone_number': '70112233', 'password': 'wrong',
+        })
+        self.assertEqual(resp.status_code, status.HTTP_401_UNAUTHORIZED)
