@@ -25,6 +25,7 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
             token['agent_id'] = str(agent.id)
             token['account_type'] = agent.account_type
             token['kyc_status'] = agent.kyc_status
+            token['kyc_tier'] = agent.kyc_tier
             token['first_name'] = agent.first_name or ''
             token['phone_number'] = agent.phone_number
             token['has_pin'] = agent.pin_code is not None
@@ -32,6 +33,7 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
             token['agent_id'] = None
             token['account_type'] = None
             token['kyc_status'] = None
+            token['kyc_tier'] = None
             token['first_name'] = user.first_name or user.username
             token['has_pin'] = False
 
@@ -583,7 +585,7 @@ class AgentSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'username', 'email', 'account_type',
             'phone_number', 'first_name', 'last_name',
-            'kyc_status',
+            'kyc_status', 'kyc_tier',
             'is_suspended', 'puces',
             'created_at', 'updated_at'
         ]

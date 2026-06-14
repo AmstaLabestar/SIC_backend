@@ -11,6 +11,7 @@ class AuthUser extends Equatable {
     required this.kycStatus,
     required this.isSuspended,
     this.accountType = 'AGENT',
+    this.kycTier = 0,
     this.hasPin = false,
   });
 
@@ -25,6 +26,10 @@ class AuthUser extends Equatable {
   /// Type de compte : 'AGENT' (PDV) ou 'CLIENT' (grand public). Pilote la
   /// navigation et les fonctionnalites accessibles (lots D*).
   final String accountType;
+
+  /// Palier KYC (0 = Starter, 1 = verifie, 2 = complet). Pilote les plafonds
+  /// (cf moteur de limites backend, endpoint `/auth/limits/`).
+  final int kycTier;
 
   /// Vrai si l'agent a deja configure un code PIN (claim du JWT d'acces).
   final bool hasPin;
@@ -49,6 +54,7 @@ class AuthUser extends Equatable {
       kycStatus: kycStatus,
       isSuspended: isSuspended,
       accountType: accountType,
+      kycTier: kycTier,
       hasPin: hasPin ?? this.hasPin,
     );
   }
@@ -63,6 +69,7 @@ class AuthUser extends Equatable {
         kycStatus,
         isSuspended,
         accountType,
+        kycTier,
         hasPin,
       ];
 }

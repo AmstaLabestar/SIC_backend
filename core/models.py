@@ -29,6 +29,10 @@ class Agent(models.Model):
     id_card_back_url = models.URLField(null=True, blank=True)
     selfie_url = models.URLField(null=True, blank=True)
     kyc_status = models.CharField(max_length=20, default='PENDING') # PENDING, APPROVED, REJECTED
+    # Palier de confiance KYC pilotant les plafonds (cf api/services/limits.py) :
+    # 0 = Starter (sans pièce), 1 = pièce vérifiée, 2 = complet (pièce+selfie).
+    # Défaut 0 ; les comptes APPROVED existants sont passés à 2 par migration.
+    kyc_tier = models.PositiveSmallIntegerField(default=0)
 
     # Code secret (PIN hashé)
     pin_code = models.CharField(max_length=128, null=True, blank=True)

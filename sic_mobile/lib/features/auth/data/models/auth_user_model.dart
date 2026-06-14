@@ -10,6 +10,7 @@ class AuthUserModel extends AuthUser {
     required super.kycStatus,
     required super.isSuspended,
     super.accountType,
+    super.kycTier,
   });
 
   factory AuthUserModel.fromJson(Map<String, dynamic> json) {
@@ -22,6 +23,7 @@ class AuthUserModel extends AuthUser {
       kycStatus: json['kyc_status'] as String? ?? 'PENDING',
       isSuspended: json['is_suspended'] as bool? ?? false,
       accountType: json['account_type'] as String? ?? 'AGENT',
+      kycTier: (json['kyc_tier'] as num?)?.toInt() ?? 0,
     );
   }
 }

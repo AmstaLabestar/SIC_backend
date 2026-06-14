@@ -8,7 +8,7 @@ from rest_framework_simplejwt.views import (
     TokenVerifyView,
 )
 from .views import (
-    TransactionViewSet, PuceViewSet, AgentProfileView,
+    TransactionViewSet, PuceViewSet, AgentProfileView, AccountLimitsView,
     RegisterView, CommissionInfoView, HealthCheckView,
     CustomTokenObtainPairView, LogoutView,
     PinSetupView, PinVerifyView,
@@ -27,6 +27,7 @@ urlpatterns = [
     path('auth/verify/', TokenVerifyView.as_view(), name='token_verify'),
     path('auth/logout/', LogoutView.as_view(), name='logout'),
     path('auth/profile/', AgentProfileView.as_view(), name='agent_profile'),
+    path('auth/limits/', AccountLimitsView.as_view(), name='account_limits'),
 
     # Code PIN
     path('auth/pin/setup/', PinSetupView.as_view(), name='pin_setup'),

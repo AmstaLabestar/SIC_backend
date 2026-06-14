@@ -28,6 +28,7 @@ from .serializers import (
 from .services.compensation_engine import (
     CompensationEngine, CommissionCalculator, TransactionValidator
 )
+from .services.limits import LimitsEngine
 from core.models import Transaction, CompensationDetail, Puce, Agent, BiometricDevice
 from core.tasks import check_transaction_timeout
 from core.utils import log_activity
@@ -110,6 +111,30 @@ class AgentProfileView(generics.RetrieveAPIView):
             # Créer le profil si inexistant (au cas où)
             agent, created = Agent.objects.get_or_create(user=self.request.user)
         return agent
+
+
+class AccountLimitsView(generics.GenericAPIView):
+    """
+    Limites KYC du compte connecté (palier, plafonds, consommation, reste).
+
+    GET /api/auth/limits/
+    Permet à l'app d'afficher « il vous reste X aujourd'hui » et d'inviter à
+    l'upgrade KYC. Les montants None signifient « illimité » (palier complet).
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        agent = getattr(request.user, 'agent_profile', None)
+        if not agent:
+            return Response({'error': 'Profil introuvable.'}, status=status.HTTP_404_NOT_FOUND)
+
+        summary = LimitsEngine.summary(agent)
+        # Sérialiser les Decimal/None en chaînes (ou null) pour le JSON.
+        payload = {
+            k: (None if v is None else str(v)) if k != 'tier' else v
+            for k, v in summary.items()
+        }
+        return Response(payload, status=status.HTTP_200_OK)
 
 
 class PuceViewSet(viewsets.ModelViewSet):
@@ -241,7 +266,7 @@ class TransactionViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, views
         serializer = self.get_serializer(instance)
         return Response(serializer.data)
 
-    @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated, IsApprovedAgent])
+    @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
     def deposit(self, request):
         """
         Effectuer un dépôtcompensé.
@@ -272,6 +297,19 @@ class TransactionViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, views
                 {'error': 'Votre compte est suspendu. Contactez le support.'},
                 status=status.HTTP_403_FORBIDDEN
             )
+
+        # Plafonds KYC (lot C2) : remplace le blocage dur IsApprovedAgent par
+        # des limites par palier (par operation / jour / mois) calculees serveur.
+        ok_limit, limit_msg = LimitsEngine.check(agent, serializer.validated_data['amount'])
+        if not ok_limit:
+            log_activity(
+                agent=agent,
+                action="TX_LIMIT_EXCEEDED",
+                description=f"Operation refusee (plafond KYC): {limit_msg}",
+                level="WARNING",
+                ip_address=request.META.get('REMOTE_ADDR'),
+            )
+            return Response({'error': limit_msg}, status=status.HTTP_403_FORBIDDEN)
 
         # Si l'agent a configuré un PIN, exiger un pin_token valide
         if agent.pin_code:
@@ -340,7 +378,7 @@ class TransactionViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, views
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-    @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated, IsApprovedAgent])
+    @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
     def withdraw(self, request):
         """
         Effectuer un retrait.
@@ -371,6 +409,19 @@ class TransactionViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, views
                 {'error': 'Votre compte est suspendu. Contactez le support.'},
                 status=status.HTTP_403_FORBIDDEN
             )
+
+        # Plafonds KYC (lot C2) : remplace le blocage dur IsApprovedAgent par
+        # des limites par palier (par operation / jour / mois) calculees serveur.
+        ok_limit, limit_msg = LimitsEngine.check(agent, serializer.validated_data['amount'])
+        if not ok_limit:
+            log_activity(
+                agent=agent,
+                action="TX_LIMIT_EXCEEDED",
+                description=f"Operation refusee (plafond KYC): {limit_msg}",
+                level="WARNING",
+                ip_address=request.META.get('REMOTE_ADDR'),
+            )
+            return Response({'error': limit_msg}, status=status.HTTP_403_FORBIDDEN)
 
         # Si l'agent a configuré un PIN, exiger un pin_token valide
         if agent.pin_code:
@@ -446,7 +497,7 @@ class TransactionViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, views
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-    @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated, IsApprovedAgent])
+    @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
     def conversion(self, request):
         """
         Effectuer une conversion entre puces.
@@ -469,6 +520,19 @@ class TransactionViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, views
                 {'error': 'Votre compte est suspendu.'},
                 status=status.HTTP_403_FORBIDDEN
             )
+
+        # Plafonds KYC (lot C2) : remplace le blocage dur IsApprovedAgent par
+        # des limites par palier (par operation / jour / mois) calculees serveur.
+        ok_limit, limit_msg = LimitsEngine.check(agent, serializer.validated_data['amount'])
+        if not ok_limit:
+            log_activity(
+                agent=agent,
+                action="TX_LIMIT_EXCEEDED",
+                description=f"Operation refusee (plafond KYC): {limit_msg}",
+                level="WARNING",
+                ip_address=request.META.get('REMOTE_ADDR'),
+            )
+            return Response({'error': limit_msg}, status=status.HTTP_403_FORBIDDEN)
 
         # Si l'agent a configuré un PIN, exiger un pin_token valide
         if agent.pin_code:

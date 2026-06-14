@@ -534,3 +534,79 @@ class PuceGlobalUniquenessTest(APITestCase):
         resp = self.client.post('/api/puces/',
                                 {'operator': 'TELECEL', 'phone_number': '78901003'})
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+
+
+class LimitsEngineTest(TestCase):
+    """Moteur de limites KYC (lot C2)."""
+
+    def setUp(self):
+        self.user = User.objects.create_user('limuser', 'l@l.com', 'Passw0rd123')
+        self.agent = Agent.objects.create(
+            user=self.user, phone_number='70809999',
+            first_name='L', last_name='E', kyc_status='PENDING', kyc_tier=0,
+        )
+
+    def test_plafond_par_operation_t0(self):
+        from api.services.limits import LimitsEngine
+        ok, msg = LimitsEngine.check(self.agent, Decimal('200001'))
+        self.assertFalse(ok)
+        self.assertIn('operation', msg.lower())
+        ok2, _ = LimitsEngine.check(self.agent, Decimal('200000'))
+        self.assertTrue(ok2)
+
+    def test_plafond_journalier_t0(self):
+        from api.services.limits import LimitsEngine
+        # 400k déjà transigés aujourd'hui ; +150k -> 550k > 500k (journalier T0).
+        Transaction.objects.create(
+            agent=self.agent, type='DEPOT', status='PENDING',
+            target_operator='MOOV', amount=Decimal('400000'),
+        )
+        ok, msg = LimitsEngine.check(self.agent, Decimal('150000'))
+        self.assertFalse(ok)
+        self.assertIn('journalier', msg.lower())
+
+    def test_palier_2_illimite(self):
+        from api.services.limits import LimitsEngine
+        self.agent.kyc_tier = 2
+        self.agent.save()
+        ok, _ = LimitsEngine.check(self.agent, Decimal('99999999'))
+        self.assertTrue(ok)
+
+
+class KycLimitsAPITest(APITestCase):
+    """Enforcement des limites au niveau API + déblocage du compte PENDING."""
+
+    def setUp(self):
+        self.user = User.objects.create_user('starter', 'starter@test.com', 'Passw0rd123')
+        self.agent = Agent.objects.create(
+            user=self.user, phone_number='70801234',
+            first_name='S', last_name='T', kyc_status='PENDING', kyc_tier=0,
+        )
+        Puce.objects.create(
+            agent=self.agent, operator='MOOV',
+            phone_number='70801234', balance=Decimal('500000'),
+        )
+        refresh = RefreshToken.for_user(self.user)
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {refresh.access_token}')
+
+    def test_compte_pending_peut_transiger_sous_plafond(self):
+        """Avant C2, IsApprovedAgent renvoyait 403. Désormais : autorisé."""
+        resp = self.client.post('/api/transactions/deposit/', {
+            'amount': '5000', 'target_operator': 'MOOV',
+            'target_phone_number': '70801299',
+        })
+        self.assertNotEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_depassement_plafond_par_operation_refuse(self):
+        resp = self.client.post('/api/transactions/deposit/', {
+            'amount': '300000', 'target_operator': 'MOOV',
+            'target_phone_number': '70801299',
+        })
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertIn('Plafond', resp.data['error'])
+
+    def test_endpoint_limites(self):
+        resp = self.client.get('/api/auth/limits/')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data['tier'], 0)
+        self.assertEqual(resp.data['per_op'], '200000')
