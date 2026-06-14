@@ -273,6 +273,8 @@ REST_FRAMEWORK = {
         # Anti-bruteforce sur l'inscription. Defaut 3/hour (prod) ;
         # surchargeable via REGISTER_THROTTLE_RATE (ex. 1000/hour en dev).
         'register': get_env('REGISTER_THROTTLE_RATE', default='3/hour'),
+        # Envoi d'OTP email. Defaut 5/hour (prod) ; surchargeable en dev.
+        'otp': get_env('OTP_THROTTLE_RATE', default='5/hour'),
         'transaction': '30/minute' # Limite sur les transactions
     },
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
@@ -470,3 +472,21 @@ CINETPAY_WEBHOOK_SECRET = get_env('CINETPAY_WEBHOOK_SECRET', default='')
 
 # Allow legacy biometric signatures (MD5) - should be False in production
 ALLOW_LEGACY_BIOMETRIC = get_bool('ALLOW_LEGACY_BIOMETRIC', default=False)
+
+# --- Email / OTP (lot A2) ---------------------------------------------------
+# En dev (DEBUG), les emails (codes OTP) s'affichent dans la console.
+# En prod, configurer SMTP via les variables d'environnement EMAIL_*.
+if DEBUG:
+    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+else:
+    EMAIL_BACKEND = get_env(
+        'EMAIL_BACKEND', default='django.core.mail.backends.smtp.EmailBackend'
+    )
+    EMAIL_HOST = get_env('EMAIL_HOST', default='')
+    EMAIL_PORT = int(get_env('EMAIL_PORT', default='587'))
+    EMAIL_USE_TLS = get_bool('EMAIL_USE_TLS', default=True)
+    EMAIL_HOST_USER = get_env('EMAIL_HOST_USER', default='')
+    EMAIL_HOST_PASSWORD = get_env('EMAIL_HOST_PASSWORD', default='')
+
+DEFAULT_FROM_EMAIL = get_env('DEFAULT_FROM_EMAIL', default='SIC <no-reply@sic.local>')
+OTP_TTL_MINUTES = int(get_env('OTP_TTL_MINUTES', default='10'))

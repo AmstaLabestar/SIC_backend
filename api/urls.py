@@ -9,7 +9,7 @@ from rest_framework_simplejwt.views import (
 )
 from .views import (
     TransactionViewSet, PuceViewSet, AgentProfileView, AccountLimitsView,
-    RegisterView, CommissionInfoView, HealthCheckView,
+    RegisterView, OtpSendView, CommissionInfoView, HealthCheckView,
     CustomTokenObtainPairView, LogoutView,
     PinSetupView, PinVerifyView,
     BiometricRegisterView, BiometricLoginView, BiometricDeviceListView
@@ -22,6 +22,7 @@ router.register(r'puces', PuceViewSet, basename='puce')
 urlpatterns = [
     # Authentication
     path('auth/register/', RegisterView.as_view(), name='register'),
+    path('auth/otp/send/', OtpSendView.as_view(), name='otp_send'),
     path('auth/login/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('auth/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('auth/verify/', TokenVerifyView.as_view(), name='token_verify'),

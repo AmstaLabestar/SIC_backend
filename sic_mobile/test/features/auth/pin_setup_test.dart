@@ -51,6 +51,9 @@ class _FakeAuthRepository implements AuthRepository {
   Future<Either<Failure, AuthUser>> getProfile() async => const Right(_user);
 
   @override
+  Future<Either<Failure, Unit>> sendOtp(String email) async => const Right(unit);
+
+  @override
   Future<Either<Failure, Unit>> register({
     required String username,
     required String email,
@@ -59,6 +62,7 @@ class _FakeAuthRepository implements AuthRepository {
     required String phoneNumber,
     required String firstName,
     required String lastName,
+    required String otp,
   }) async =>
       const Right(unit);
 

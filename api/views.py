@@ -96,6 +96,30 @@ class RegisterView(generics.CreateAPIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+class OtpSendView(generics.GenericAPIView):
+    """
+    Envoie un code OTP par email (vérification à l'inscription).
+
+    POST /api/auth/otp/send/  { "email": "...", "purpose": "register" }
+    Réponse volontairement neutre (n'indique pas si l'email existe déjà).
+    """
+    permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'otp'
+
+    def post(self, request):
+        email = (request.data.get('email') or '').strip().lower()
+        if not email or '@' not in email:
+            return Response({'error': 'Email invalide.'}, status=status.HTTP_400_BAD_REQUEST)
+        purpose = request.data.get('purpose') or 'register'
+        from .services.otp import generate_and_send
+        expires_in = generate_and_send(email, purpose)
+        return Response(
+            {'message': 'Code de vérification envoyé.', 'expires_in': expires_in},
+            status=status.HTTP_200_OK,
+        )
+
+
 class AgentProfileView(generics.RetrieveAPIView):
     """
     Vue pour récupérer le profil de l'agent connecté.

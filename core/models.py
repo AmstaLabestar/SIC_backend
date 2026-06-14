@@ -178,3 +178,38 @@ class ActivityLog(models.Model):
 
     def __str__(self):
         return f"[{self.level}] {self.action} - {self.created_at.strftime('%Y-%m-%d %H:%M')}"
+
+
+class EmailOtp(models.Model):
+    """Code OTP envoyé par email (vérification à l'inscription, reset à venir).
+
+    Canal volontairement interchangeable (email en v1 ; SMS/WhatsApp plus tard
+    sans changer ce modèle). L'email prouve la possession de l'email, pas du
+    numéro — la validation réelle de l'identité reste le KYC.
+    """
+    PURPOSE_REGISTER = 'register'
+    PURPOSE_RESET = 'reset'
+    MAX_ATTEMPTS = 5
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    email = models.EmailField(db_index=True)
+    code = models.CharField(max_length=6)
+    purpose = models.CharField(max_length=20, default=PURPOSE_REGISTER)
+    attempts = models.PositiveSmallIntegerField(default=0)
+    is_used = models.BooleanField(default=False)
+    expires_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [models.Index(fields=['email', 'purpose', 'is_used'])]
+
+    def is_valid(self):
+        from django.utils import timezone
+        return (
+            not self.is_used
+            and self.attempts < self.MAX_ATTEMPTS
+            and self.expires_at > timezone.now()
+        )
+
+    def __str__(self):
+        return f"OTP {self.purpose} {self.email} ({'used' if self.is_used else 'active'})"

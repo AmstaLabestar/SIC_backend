@@ -13,6 +13,9 @@ class _FakeAuthRepository implements AuthRepository {
   Map<String, String>? lastRegister;
 
   @override
+  Future<Either<Failure, Unit>> sendOtp(String email) async => const Right(unit);
+
+  @override
   Future<Either<Failure, Unit>> register({
     required String username,
     required String email,
@@ -21,10 +24,12 @@ class _FakeAuthRepository implements AuthRepository {
     required String phoneNumber,
     required String firstName,
     required String lastName,
+    required String otp,
   }) async {
     lastRegister = {
       'username': username,
       'phone': phoneNumber,
+      'otp': otp,
     };
     return registerFailure != null ? Left(registerFailure!) : const Right(unit);
   }
@@ -74,6 +79,7 @@ void main() {
           phoneNumber: '70123456',
           firstName: 'M',
           lastName: 'K',
+          otp: '123456',
         );
 
     expect(error, isNull);
@@ -99,6 +105,7 @@ void main() {
           phoneNumber: '70123456',
           firstName: 'M',
           lastName: 'K',
+          otp: '123456',
         );
 
     expect(error, 'Ce numero est deja utilise.');

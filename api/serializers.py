@@ -170,11 +170,13 @@ class RegisterSerializer(serializers.ModelSerializer):
         required=False,
         default=Agent.ACCOUNT_AGENT,
     )
+    # Code OTP reçu par email, à vérifier avant la création du compte (lot A2).
+    otp = serializers.CharField(write_only=True, required=True, max_length=6)
 
     class Meta:
         model = User
         fields = ['username', 'email', 'password', 'password_confirm',
-                  'phone_number', 'first_name', 'last_name', 'account_type']
+                  'phone_number', 'first_name', 'last_name', 'account_type', 'otp']
 
     def validate_username(self, value):
         value = value.lower().strip()
@@ -237,7 +239,14 @@ class RegisterSerializer(serializers.ModelSerializer):
         first_name = validated_data.pop('first_name', '')
         last_name = validated_data.pop('last_name', '')
         account_type = validated_data.pop('account_type', Agent.ACCOUNT_AGENT)
+        otp_code = validated_data.pop('otp', '')
         validated_data.pop('password_confirm')  # Supprimer la confirmation
+
+        # Vérifier l'OTP email AVANT de créer le compte (lot A2).
+        from api.services.otp import verify as verify_otp
+        ok, otp_msg = verify_otp(validated_data['email'], otp_code, 'register')
+        if not ok:
+            raise serializers.ValidationError({'otp': [otp_msg]})
 
         # Créer l'utilisateur
         user = User.objects.create_user(

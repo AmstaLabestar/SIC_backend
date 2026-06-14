@@ -43,6 +43,16 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   @override
+  Future<Either<Failure, Unit>> sendOtp(String email) async {
+    try {
+      await _datasource.sendOtp(email);
+      return const Right(unit);
+    } catch (error) {
+      return Left(mapDioErrorToFailure(error));
+    }
+  }
+
+  @override
   Future<Either<Failure, Unit>> register({
     required String username,
     required String email,
@@ -51,6 +61,7 @@ class AuthRepositoryImpl implements AuthRepository {
     required String phoneNumber,
     required String firstName,
     required String lastName,
+    required String otp,
   }) async {
     try {
       await _datasource.register(
@@ -61,6 +72,7 @@ class AuthRepositoryImpl implements AuthRepository {
         phoneNumber: phoneNumber,
         firstName: firstName,
         lastName: lastName,
+        otp: otp,
       );
       return const Right(unit);
     } catch (error) {

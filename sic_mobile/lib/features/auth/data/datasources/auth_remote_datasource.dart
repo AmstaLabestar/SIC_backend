@@ -38,8 +38,17 @@ class AuthRemoteDatasource {
     await _dio.post<void>(ApiConstants.logout, data: {'refresh': refresh});
   }
 
+  /// Envoie un code OTP de verification a l'email (`POST /auth/otp/send/`).
+  Future<void> sendOtp(String email) async {
+    await _dio.post<Map<String, dynamic>>(
+      ApiConstants.otpSend,
+      data: {'email': email, 'purpose': 'register'},
+    );
+  }
+
   /// Inscription d'un nouvel agent (`POST /auth/register/`).
-  /// Le backend cree un compte KYC=PENDING et ne renvoie pas de tokens.
+  /// Exige le code [otp] recu par email. Le backend cree un compte KYC=PENDING
+  /// et ne renvoie pas de tokens.
   Future<void> register({
     required String username,
     required String email,
@@ -48,6 +57,7 @@ class AuthRemoteDatasource {
     required String phoneNumber,
     required String firstName,
     required String lastName,
+    required String otp,
   }) async {
     await _dio.post<Map<String, dynamic>>(
       ApiConstants.register,
@@ -59,6 +69,7 @@ class AuthRemoteDatasource {
         'phone_number': phoneNumber,
         'first_name': firstName,
         'last_name': lastName,
+        'otp': otp,
       },
     );
   }

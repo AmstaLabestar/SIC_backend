@@ -438,14 +438,22 @@ class RegisterSerializerTest(TestCase):
     """Tests de l'inscription (au niveau serializer, sans throttle)."""
 
     def _data(self, username, phone):
+        # L'OTP est requis (lot A2) : on en génère un valide pour cet email.
+        from api.services.otp import generate_and_send
+        from core.models import EmailOtp
+        email = f'{username}@test.com'
+        generate_and_send(email, 'register')
+        code = EmailOtp.objects.filter(
+            email=email, is_used=False).latest('created_at').code
         return {
             'username': username,
-            'email': f'{username}@test.com',
+            'email': email,
             'password': 'Passw0rd123',
             'password_confirm': 'Passw0rd123',
             'phone_number': phone,
             'first_name': 'Test',
             'last_name': 'Agent',
+            'otp': code,
         }
 
     def test_register_cree_la_premiere_puce_depuis_le_numero(self):
@@ -534,6 +542,64 @@ class PuceGlobalUniquenessTest(APITestCase):
         resp = self.client.post('/api/puces/',
                                 {'operator': 'TELECEL', 'phone_number': '78901003'})
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+
+
+class EmailOtpTest(TestCase):
+    """OTP email à l'inscription (lot A2)."""
+
+    def test_send_cree_un_code(self):
+        from api.services.otp import generate_and_send
+        from core.models import EmailOtp
+        expires_in = generate_and_send('new@test.com', 'register')
+        self.assertGreater(expires_in, 0)
+        self.assertTrue(EmailOtp.objects.filter(
+            email='new@test.com', is_used=False).exists())
+
+    def test_verify_ok_consomme_le_code(self):
+        from api.services.otp import generate_and_send, verify
+        from core.models import EmailOtp
+        generate_and_send('v@test.com', 'register')
+        code = EmailOtp.objects.get(email='v@test.com', is_used=False).code
+        ok, msg = verify('v@test.com', code, 'register')
+        self.assertTrue(ok)
+        # Rejoué -> refusé (déjà consommé).
+        ok2, _ = verify('v@test.com', code, 'register')
+        self.assertFalse(ok2)
+
+    def test_verify_mauvais_code(self):
+        from api.services.otp import generate_and_send, verify
+        generate_and_send('w@test.com', 'register')
+        ok, msg = verify('w@test.com', '000000', 'register')
+        # Code aléatoire : extrêmement improbable d'être correct.
+        if ok:
+            self.skipTest('collision OTP improbable')
+        self.assertIn('incorrect', msg.lower())
+
+    def test_register_sans_otp_refuse(self):
+        from api.serializers import RegisterSerializer
+        data = {
+            'username': 'nootp', 'email': 'nootp@test.com',
+            'password': 'Passw0rd123', 'password_confirm': 'Passw0rd123',
+            'phone_number': '70333111', 'first_name': 'N', 'last_name': 'O',
+        }
+        s = RegisterSerializer(data=data)
+        self.assertFalse(s.is_valid())
+        self.assertIn('otp', s.errors)
+
+    def test_register_mauvais_otp_refuse(self):
+        from api.serializers import RegisterSerializer
+        data = {
+            'username': 'badotp', 'email': 'badotp@test.com',
+            'password': 'Passw0rd123', 'password_confirm': 'Passw0rd123',
+            'phone_number': '70333222', 'first_name': 'B', 'last_name': 'O',
+            'otp': '123456',
+        }
+        s = RegisterSerializer(data=data)
+        # Champ valide en forme, mais vérification échoue à la création.
+        self.assertTrue(s.is_valid(), s.errors)
+        from rest_framework import serializers as drf
+        with self.assertRaises(drf.ValidationError):
+            s.save()
 
 
 class LimitsEngineTest(TestCase):

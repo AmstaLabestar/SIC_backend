@@ -73,7 +73,15 @@ class AuthController extends AsyncNotifier<AuthUser?> {
     ref.invalidate(transactionsNotifierProvider);
   }
 
-  /// Inscription. Retourne un message d'erreur, ou `null` si succes.
+  /// Etape 1 de l'inscription : envoie le code OTP a l'email. Retourne un
+  /// message d'erreur, ou `null` si succes.
+  Future<String?> sendOtp(String email) async {
+    final repo = ref.read(authRepositoryProvider);
+    final result = await repo.sendOtp(email);
+    return result.fold((failure) => failure.message, (_) => null);
+  }
+
+  /// Inscription (etape 2). Retourne un message d'erreur, ou `null` si succes.
   /// N'authentifie pas automatiquement (compte en attente de validation KYC).
   Future<String?> register({
     required String username,
@@ -83,6 +91,7 @@ class AuthController extends AsyncNotifier<AuthUser?> {
     required String phoneNumber,
     required String firstName,
     required String lastName,
+    required String otp,
   }) async {
     final repo = ref.read(authRepositoryProvider);
     final result = await repo.register(
@@ -93,6 +102,7 @@ class AuthController extends AsyncNotifier<AuthUser?> {
       phoneNumber: phoneNumber,
       firstName: firstName,
       lastName: lastName,
+      otp: otp,
     );
     return result.fold((failure) => failure.message, (_) => null);
   }

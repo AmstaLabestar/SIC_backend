@@ -7,7 +7,11 @@ abstract class AuthRepository {
   /// Authentifie, persiste les tokens et retourne le profil.
   Future<Either<Failure, AuthUser>> login(String username, String password);
 
+  /// Envoie un code OTP de verification a l'email (etape 1 de l'inscription).
+  Future<Either<Failure, Unit>> sendOtp(String email);
+
   /// Inscrit un nouvel agent (compte cree en attente de validation KYC).
+  /// [otp] : code recu par email (verifie cote backend avant creation).
   Future<Either<Failure, Unit>> register({
     required String username,
     required String email,
@@ -16,6 +20,7 @@ abstract class AuthRepository {
     required String phoneNumber,
     required String firstName,
     required String lastName,
+    required String otp,
   });
 
   /// Recupere le profil de l'agent connecte.
