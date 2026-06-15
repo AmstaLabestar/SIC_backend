@@ -199,11 +199,15 @@ class _CompensationPill extends StatelessWidget {
           const Icon(Icons.swap_horiz_rounded,
               color: AppColors.onPrimary, size: 14),
           const SizedBox(width: 4),
-          Text(
-            '${FcfaFormatter.format(amount)} compense aujourd\'hui',
-            style: AppTextStyles.caption.copyWith(
-              color: AppColors.onPrimary,
-              fontWeight: FontWeight.w700,
+          Flexible(
+            child: Text(
+              '${FcfaFormatter.format(amount)} compense aujourd\'hui',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTextStyles.caption.copyWith(
+                color: AppColors.onPrimary,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
         ],
