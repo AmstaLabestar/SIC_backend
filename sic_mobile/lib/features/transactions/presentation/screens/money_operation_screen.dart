@@ -14,13 +14,39 @@ import '../providers/transaction_providers.dart';
 import '../widgets/operation_success_sheet.dart';
 import '../widgets/pin_prompt_sheet.dart';
 
-/// Formulaire de depot ou de retrait (montant + operateur + numero cible).
+/// Type d'operation sur un numero (montant + operateur + numero du destinataire).
+enum MoneyOperationKind { deposit, withdraw, transfer }
+
+/// Formulaire de depot, retrait ou envoi P2P (montant + operateur + numero cible).
 class MoneyOperationScreen extends ConsumerStatefulWidget {
-  const MoneyOperationScreen({super.key, required this.isDeposit});
+  const MoneyOperationScreen({super.key, required this.kind});
 
-  final bool isDeposit;
+  final MoneyOperationKind kind;
 
-  String get _title => isDeposit ? 'Depot' : 'Retrait';
+  String get _title => switch (kind) {
+        MoneyOperationKind.deposit => 'Depot',
+        MoneyOperationKind.withdraw => 'Retrait',
+        MoneyOperationKind.transfer => 'Envoyer',
+      };
+
+  String get _successTitle => switch (kind) {
+        MoneyOperationKind.deposit => 'Depot initie',
+        MoneyOperationKind.withdraw => 'Retrait initie',
+        MoneyOperationKind.transfer => 'Transfert initie',
+      };
+
+  String get _ctaLabel => switch (kind) {
+        MoneyOperationKind.deposit => 'Confirmer le depot',
+        MoneyOperationKind.withdraw => 'Confirmer le retrait',
+        MoneyOperationKind.transfer => 'Confirmer l\'envoi',
+      };
+
+  /// Libelle injecte dans la feuille PIN (« Saisissez votre PIN pour ... »).
+  String get _pinActionLabel => switch (kind) {
+        MoneyOperationKind.deposit => 'le depot',
+        MoneyOperationKind.withdraw => 'le retrait',
+        MoneyOperationKind.transfer => 'l\'envoi',
+      };
 
   @override
   ConsumerState<MoneyOperationScreen> createState() =>
@@ -99,7 +125,7 @@ class _MoneyOperationScreenState extends ConsumerState<MoneyOperationScreen> {
               const SizedBox(height: AppSpacing.xl),
 
               SicButton(
-                label: 'Confirmer le ${widget._title.toLowerCase()}',
+                label: widget._ctaLabel,
                 isLoading: _isSubmitting,
                 onPressed: _isSubmitting ? null : _submit,
               ),
@@ -116,7 +142,7 @@ class _MoneyOperationScreenState extends ConsumerState<MoneyOperationScreen> {
     // Regle mobile money : aucune operation sans le code PIN.
     final pinToken = await PinPromptSheet.show(
       context,
-      actionLabel: 'le ${widget._title.toLowerCase()}',
+      actionLabel: widget._pinActionLabel,
     );
     if (pinToken == null || !mounted) return; // agent a annule.
 
@@ -125,19 +151,26 @@ class _MoneyOperationScreenState extends ConsumerState<MoneyOperationScreen> {
     final repo = ref.read(transactionRepositoryProvider);
 
     setState(() => _isSubmitting = true);
-    final result = widget.isDeposit
-        ? await repo.deposit(
-            amount: amount,
-            operatorCode: _operatorCode,
-            phoneNumber: phone,
-            pinToken: pinToken,
-          )
-        : await repo.withdraw(
-            amount: amount,
-            operatorCode: _operatorCode,
-            phoneNumber: phone,
-            pinToken: pinToken,
-          );
+    final result = switch (widget.kind) {
+      MoneyOperationKind.deposit => await repo.deposit(
+          amount: amount,
+          operatorCode: _operatorCode,
+          phoneNumber: phone,
+          pinToken: pinToken,
+        ),
+      MoneyOperationKind.withdraw => await repo.withdraw(
+          amount: amount,
+          operatorCode: _operatorCode,
+          phoneNumber: phone,
+          pinToken: pinToken,
+        ),
+      MoneyOperationKind.transfer => await repo.transfer(
+          amount: amount,
+          operatorCode: _operatorCode,
+          phoneNumber: phone,
+          pinToken: pinToken,
+        ),
+    };
 
     if (!mounted) return;
     setState(() => _isSubmitting = false);
@@ -165,7 +198,7 @@ class _MoneyOperationScreenState extends ConsumerState<MoneyOperationScreen> {
     if (!mounted) return;
     await OperationSuccessSheet.show(
       context,
-      title: '${widget._title} initie',
+      title: widget._successTitle,
       result: operation,
     );
 

@@ -118,12 +118,17 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/operations/depot',
         builder: (context, state) =>
-            const MoneyOperationScreen(isDeposit: true),
+            const MoneyOperationScreen(kind: MoneyOperationKind.deposit),
       ),
       GoRoute(
         path: '/operations/retrait',
         builder: (context, state) =>
-            const MoneyOperationScreen(isDeposit: false),
+            const MoneyOperationScreen(kind: MoneyOperationKind.withdraw),
+      ),
+      GoRoute(
+        path: '/operations/envoyer',
+        builder: (context, state) =>
+            const MoneyOperationScreen(kind: MoneyOperationKind.transfer),
       ),
       GoRoute(
         path: '/operations/transfert',

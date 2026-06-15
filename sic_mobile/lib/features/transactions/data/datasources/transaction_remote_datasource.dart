@@ -51,6 +51,21 @@ class TransactionRemoteDatasource {
     );
   }
 
+  Future<OperationResultModel> transfer({
+    required double amount,
+    required String operatorCode,
+    required String phoneNumber,
+    String? pinToken,
+  }) {
+    return _operation(
+      ApiConstants.transfer,
+      amount,
+      operatorCode,
+      phoneNumber,
+      pinToken,
+    );
+  }
+
   Future<OperationResultModel> _operation(
     String path,
     double amount,

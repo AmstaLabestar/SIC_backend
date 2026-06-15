@@ -25,8 +25,17 @@ abstract class TransactionRepository {
     String? pinToken,
   });
 
-  /// Transfert (conversion entre puces) : `POST /transactions/conversion/`.
+  /// Envoi P2P vers un numero : `POST /transactions/transfer/`.
   /// Voir [deposit] pour [pinToken].
+  Future<Either<Failure, OperationResult>> transfer({
+    required double amount,
+    required String operatorCode,
+    required String phoneNumber,
+    String? pinToken,
+  });
+
+  /// Conversion / reequilibrage entre puces de l'agent :
+  /// `POST /transactions/conversion/`. Voir [deposit] pour [pinToken].
   Future<Either<Failure, OperationResult>> convert({
     required double amount,
     required String sourcePuceId,

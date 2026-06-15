@@ -335,6 +335,28 @@ class TransactionAPITest(APITestCase):
         })
         self.assertIn(response.status_code, [status.HTTP_201_CREATED, status.HTTP_400_BAD_REQUEST])
 
+    def test_create_transfer(self):
+        """Envoi P2P vers un numero : cree une transaction de type TRANSFERT."""
+        response = self.client.post('/api/transactions/transfer/', {
+            'amount': '5000',
+            'target_operator': 'ORANGE',
+            'target_phone_number': '07000002'
+        })
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertIn('transaction_id', response.data)
+        tx = Transaction.objects.get(id=response.data['transaction_id'])
+        self.assertEqual(tx.type, 'TRANSFERT')
+        self.assertEqual(tx.agent, self.agent)
+
+    def test_create_transfer_invalid_amount(self):
+        """Un transfert avec un montant trop petit est refuse (400)."""
+        response = self.client.post('/api/transactions/transfer/', {
+            'amount': '50',
+            'target_operator': 'ORANGE',
+            'target_phone_number': '07000002'
+        })
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
     def test_health_check(self):
         """Test le endpoint de santé."""
         response = self.client.get('/api/health/')

@@ -47,6 +47,7 @@ class ApiConstants {
   // Operations (Phase 3+)
   static const deposit = '/transactions/deposit/';
   static const withdraw = '/transactions/withdraw/';
+  static const transfer = '/transactions/transfer/';
   static const conversion = '/transactions/conversion/';
   static const webhook = '/transactions/webhook/';
 

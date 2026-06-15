@@ -499,6 +499,120 @@ class TransactionViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, views
             )
 
     @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
+    def transfer(self, request):
+        """
+        Envoyer de l'argent vers un numero (P2P).
+
+        Mecaniquement identique a un depot (pousse de l'e-money vers un numero
+        externe avec compensation cascade sur les puces), mais de type TRANSFERT.
+
+        POST /api/transactions/transfer/
+        {
+            "amount": 10000,
+            "target_operator": "ORANGE",
+            "target_phone_number": "0700000002"
+        }
+        """
+        serializer = DepositSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        agent = request.user.agent_profile
+
+        # Verifier si l'agent n'est pas suspendu
+        if agent.is_suspended:
+            log_activity(
+                agent=agent,
+                action="TX_TRANSFER_REFUSED",
+                description="Tentative de transfert refusee: agent suspendu",
+                level="WARNING",
+                ip_address=request.META.get('REMOTE_ADDR')
+            )
+            return Response(
+                {'error': 'Votre compte est suspendu. Contactez le support.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+
+        # Plafonds KYC (lot C2)
+        ok_limit, limit_msg = LimitsEngine.check(agent, serializer.validated_data['amount'])
+        if not ok_limit:
+            log_activity(
+                agent=agent,
+                action="TX_LIMIT_EXCEEDED",
+                description=f"Operation refusee (plafond KYC): {limit_msg}",
+                level="WARNING",
+                ip_address=request.META.get('REMOTE_ADDR'),
+            )
+            return Response({'error': limit_msg}, status=status.HTTP_403_FORBIDDEN)
+
+        # Si l'agent a configure un PIN, exiger un pin_token valide
+        if agent.pin_code:
+            pin_token = request.data.get('pin_token') or request.headers.get('X-PIN-TOKEN')
+            if not pin_token:
+                return Response({'error': 'PIN verification required.'}, status=status.HTTP_401_UNAUTHORIZED)
+            from django.core import signing
+            from django.core.signing import BadSignature, SignatureExpired
+            try:
+                payload = signing.loads(pin_token, salt='pin-token', max_age=300)
+                if payload.get('agent_id') != str(agent.id):
+                    return Response({'error': 'Invalid PIN token.'}, status=status.HTTP_401_UNAUTHORIZED)
+            except SignatureExpired:
+                return Response({'error': 'PIN token expired.'}, status=status.HTTP_401_UNAUTHORIZED)
+            except BadSignature:
+                return Response({'error': 'Invalid PIN token.'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        try:
+            tx = CompensationEngine.create_compensated_transaction(
+                agent=agent,
+                tx_type='TRANSFERT',
+                amount=serializer.validated_data['amount'],
+                target_operator=serializer.validated_data['target_operator'],
+                target_phone_number=serializer.validated_data['target_phone_number']
+            )
+
+            log_activity(
+                agent=agent,
+                action="TX_TRANSFER_INITIATED",
+                description=f"Transfert de {tx.amount} FCFA vers {tx.target_phone_number} initiated.",
+                level="INFO",
+                ip_address=request.META.get('REMOTE_ADDR')
+            )
+
+            return Response({
+                'message': 'Transfert initie avec succes',
+                'transaction_id': str(tx.id),
+                'amount': str(tx.amount),
+                'commission_sic': str(tx.commission_sic),
+                'is_compensated': tx.is_compensated,
+                'status': tx.status,
+                'created_at': tx.created_at.isoformat()
+            }, status=status.HTTP_201_CREATED)
+
+        except ValueError as e:
+            log_activity(
+                agent=agent,
+                action="TX_TRANSFER_FAILED",
+                description=f"Echec creation transfert: {str(e)}",
+                level="WARNING",
+                ip_address=request.META.get('REMOTE_ADDR')
+            )
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as e:
+            logger.exception(f"Erreur inattendue lors du transfert: {e}")
+            log_activity(
+                agent=agent,
+                action="TX_TRANSFER_ERROR",
+                description=f"Erreur technique: {str(e)}",
+                level="ERROR",
+                ip_address=request.META.get('REMOTE_ADDR')
+            )
+            return Response(
+                {'error': 'Une erreur technique est survenue. Veuillez reessayer.'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+    @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
     def withdraw(self, request):
         """
         Effectuer un retrait.

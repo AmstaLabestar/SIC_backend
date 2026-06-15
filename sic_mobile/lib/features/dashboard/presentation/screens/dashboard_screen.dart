@@ -105,9 +105,15 @@ class _DashboardContent extends ConsumerWidget {
                   onTap: () => context.push('/operations/retrait'),
                 ),
                 Operation(
-                  icon: Icons.swap_horiz_rounded,
-                  label: 'Transfert',
+                  icon: Icons.send_rounded,
+                  label: 'Envoyer',
                   color: const Color(0xFF534AB7),
+                  onTap: () => context.push('/operations/envoyer'),
+                ),
+                Operation(
+                  icon: Icons.swap_horiz_rounded,
+                  label: 'Conversion',
+                  color: const Color(0xFF2A9D8F),
                   onTap: () => context.push('/operations/transfert'),
                 ),
               ],

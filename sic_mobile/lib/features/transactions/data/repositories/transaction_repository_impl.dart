@@ -60,6 +60,25 @@ class TransactionRepositoryImpl implements TransactionRepository {
   }
 
   @override
+  Future<Either<Failure, OperationResult>> transfer({
+    required double amount,
+    required String operatorCode,
+    required String phoneNumber,
+    String? pinToken,
+  }) async {
+    try {
+      return Right(await _datasource.transfer(
+        amount: amount,
+        operatorCode: operatorCode,
+        phoneNumber: phoneNumber,
+        pinToken: pinToken,
+      ));
+    } catch (error) {
+      return Left(mapDioErrorToFailure(error));
+    }
+  }
+
+  @override
   Future<Either<Failure, OperationResult>> convert({
     required double amount,
     required String sourcePuceId,

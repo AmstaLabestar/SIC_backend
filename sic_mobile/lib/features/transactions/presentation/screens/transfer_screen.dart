@@ -15,7 +15,7 @@ import '../providers/transaction_providers.dart';
 import '../widgets/operation_success_sheet.dart';
 import '../widgets/pin_prompt_sheet.dart';
 
-/// Transfert entre deux puces de l'agent (conversion / swap).
+/// Conversion / reequilibrage entre deux puces de l'agent (swap interne).
 class TransferScreen extends ConsumerStatefulWidget {
   const TransferScreen({super.key});
 
@@ -44,7 +44,7 @@ class _TransferScreenState extends ConsumerState<TransferScreen> {
         .toList();
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Transfert')),
+      appBar: AppBar(title: const Text('Conversion')),
       body: SafeArea(
         child: puces.length < 2
             ? _NotEnoughPuces()
@@ -89,7 +89,7 @@ class _TransferScreenState extends ConsumerState<TransferScreen> {
                     const SizedBox(height: AppSpacing.xl),
 
                     SicButton(
-                      label: 'Confirmer le transfert',
+                      label: 'Confirmer la conversion',
                       isLoading: _isSubmitting,
                       onPressed: _isSubmitting ? null : _submit,
                     ),
@@ -146,7 +146,7 @@ class _TransferScreenState extends ConsumerState<TransferScreen> {
     // Regle mobile money : aucune operation sans le code PIN.
     final pinToken = await PinPromptSheet.show(
       context,
-      actionLabel: 'le transfert',
+      actionLabel: 'la conversion',
     );
     if (pinToken == null || !mounted) return; // agent a annule.
 
@@ -186,7 +186,7 @@ class _TransferScreenState extends ConsumerState<TransferScreen> {
     if (!mounted) return;
     await OperationSuccessSheet.show(
       context,
-      title: 'Transfert initie',
+      title: 'Conversion initiee',
       result: operation,
     );
 
@@ -207,7 +207,7 @@ class _NotEnoughPuces extends StatelessWidget {
                 size: 48, color: AppColors.textTertiary),
             const SizedBox(height: AppSpacing.md),
             Text(
-              'Il faut au moins 2 puces pour effectuer un transfert.',
+              'Il faut au moins 2 puces pour effectuer une conversion.',
               textAlign: TextAlign.center,
               style: AppTextStyles.bodyLarge,
             ),

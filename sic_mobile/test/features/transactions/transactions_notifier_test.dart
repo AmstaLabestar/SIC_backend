@@ -43,6 +43,17 @@ class _FakeTransactionRepository implements TransactionRepository {
   }
 
   @override
+  Future<Either<Failure, OperationResult>> transfer({
+    required double amount,
+    required String operatorCode,
+    required String phoneNumber,
+    String? pinToken,
+  }) async {
+    calls.add('transfer:$amount:$operatorCode:$phoneNumber:$pinToken');
+    return _result(amount);
+  }
+
+  @override
   Future<Either<Failure, OperationResult>> convert({
     required double amount,
     required String sourcePuceId,
@@ -120,12 +131,18 @@ void main() {
         operatorCode: 'MOOV',
         phoneNumber: '70000001',
         pinToken: 'tok-w');
+    await r.transfer(
+        amount: 1500,
+        operatorCode: 'OM',
+        phoneNumber: '07000002',
+        pinToken: 'tok-t');
     await r.convert(
         amount: 2000, sourcePuceId: 'a', targetPuceId: 'b', pinToken: 'tok-c');
 
     expect(repo.calls, [
       'deposit:5000.0:OM:07000001:tok-d',
       'withdraw:3000.0:MOOV:70000001:tok-w',
+      'transfer:1500.0:OM:07000002:tok-t',
       'convert:2000.0:a:b:tok-c',
     ]);
   });
