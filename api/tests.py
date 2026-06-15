@@ -256,6 +256,35 @@ class CompensationEngineTest(TestCase):
         self.assertEqual(tx.type, 'SWAP')
         self.assertEqual(tx.status, 'PENDING')
 
+    # --- Cas limites du moteur de compensation (plan de test §3.1) ---------
+
+    def test_calculate_plan_ignore_puce_inactive(self):
+        """Une puce inactive n'est pas comptee dans le solde disponible."""
+        self.puce2.is_active = False
+        self.puce2.save()
+        # Seule puce1 (10000) est active -> 12000 doit echouer.
+        with self.assertRaises(ValueError):
+            CompensationEngine.calculate_plan(self.agent, Decimal('12000'))
+
+    def test_calculate_plan_solde_exact(self):
+        """Montant egal au solde global total : plan complet, aucune erreur."""
+        plan = CompensationEngine.calculate_plan(self.agent, Decimal('15000'))
+        total = sum(item['amount'] for item in plan)
+        self.assertEqual(total, Decimal('15000'))
+
+    def test_calculate_plan_ordonne_par_solde_decroissant(self):
+        """La cascade commence par la puce au plus gros solde (puce1)."""
+        plan = CompensationEngine.calculate_plan(self.agent, Decimal('3000'))
+        self.assertEqual(len(plan), 1)
+        self.assertEqual(plan[0]['puce'].id, self.puce1.id)
+
+    def test_calculate_plan_montant_nul_ou_negatif_refuse(self):
+        """Un montant <= 0 leve une ValueError (pas de plan)."""
+        with self.assertRaises(ValueError):
+            CompensationEngine.calculate_plan(self.agent, Decimal('0'))
+        with self.assertRaises(ValueError):
+            CompensationEngine.calculate_plan(self.agent, Decimal('-100'))
+
 
 class TransactionAPITest(APITestCase):
     """Tests pour les endpoints API des transactions."""
@@ -1074,3 +1103,51 @@ class KycSubmitTest(APITestCase):
             'agent_id': str(self.agent.id), 'decision': 'approve',
         })
         self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+
+
+class LogoutBlacklistTest(APITestCase):
+    """Securite : le logout blackliste le refresh token (session revocable)."""
+
+    def setUp(self):
+        self.user = User.objects.create_user('logoutuser', 'lo@test.com', 'Passw0rd123')
+        self.agent = Agent.objects.create(
+            user=self.user, phone_number='70445566',
+            first_name='L', last_name='O', kyc_status='PENDING',
+        )
+        self.refresh = RefreshToken.for_user(self.user)
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {self.refresh.access_token}')
+
+    def test_logout_blackliste_le_refresh(self):
+        resp = self.client.post('/api/auth/logout/', {'refresh': str(self.refresh)})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        # Le refresh blackliste ne doit plus pouvoir produire un access token.
+        self.client.credentials()  # retirer l'en-tete d'auth
+        again = self.client.post('/api/auth/refresh/', {'refresh': str(self.refresh)})
+        self.assertEqual(again.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_logout_sans_refresh_refuse(self):
+        resp = self.client.post('/api/auth/logout/', {})
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+class ThrottlingTest(APITestCase):
+    """Securite : la limite de debit login (5/min) renvoie 429 au-dela."""
+
+    def setUp(self):
+        from django.core.cache import cache
+        cache.clear()  # compteur de throttle propre
+        self.user = User.objects.create_user('throttleuser', 'th@test.com', 'Passw0rd123')
+        self.agent = Agent.objects.create(
+            user=self.user, phone_number='70778899',
+            first_name='T', last_name='H', kyc_status='PENDING',
+        )
+
+    def test_login_au_dela_du_quota_renvoie_429(self):
+        # Le scope 'login' est a 5/minute : la 6e tentative doit etre etranglee.
+        last_status = None
+        for _ in range(6):
+            resp = self.client.post('/api/auth/login/', {
+                'phone_number': '70778899', 'password': 'Passw0rd123',
+            })
+            last_status = resp.status_code
+        self.assertEqual(last_status, status.HTTP_429_TOO_MANY_REQUESTS)
