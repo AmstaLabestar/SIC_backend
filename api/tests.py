@@ -895,3 +895,44 @@ class PasswordResetTest(APITestCase):
         })
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn('new_password', resp.data)
+
+
+class PinStrengthTest(APITestCase):
+    """Lot A6 : refus des PIN triviaux à la création."""
+
+    def setUp(self):
+        self.user = User.objects.create_user('pinuser', 'pin@test.com', 'Passw0rd123')
+        self.agent = Agent.objects.create(
+            user=self.user, phone_number='70700070',
+            first_name='P', last_name='N', kyc_status='PENDING',
+        )
+        refresh = RefreshToken.for_user(self.user)
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {refresh.access_token}')
+
+    def test_unit_weak_pin_reason(self):
+        from api.services.pin_rules import weak_pin_reason
+        for weak in ['0000', '1111', '1234', '4321', '2345', '987654', '111111']:
+            self.assertIsNotNone(weak_pin_reason(weak), f'{weak} devrait etre faible')
+        for ok in ['1357', '2580', '1928', '4071']:
+            self.assertIsNone(weak_pin_reason(ok), f'{ok} devrait etre accepte')
+
+    def _setup(self, pin):
+        return self.client.post('/api/auth/pin/setup/', {
+            'password': 'Passw0rd123', 'pin': pin, 'pin_confirm': pin,
+        })
+
+    def test_pin_trivial_refuse(self):
+        resp = self._setup('1234')
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('pin', resp.data)
+
+    def test_pin_repete_refuse(self):
+        resp = self._setup('0000')
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('pin', resp.data)
+
+    def test_pin_robuste_accepte(self):
+        resp = self._setup('1357')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.agent.refresh_from_db()
+        self.assertIsNotNone(self.agent.pin_code)

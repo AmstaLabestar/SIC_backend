@@ -105,6 +105,11 @@ class PinSetupSerializer(serializers.Serializer):
     def validate_pin(self, value):
         if not value.isdigit():
             raise serializers.ValidationError("Le PIN doit contenir uniquement des chiffres.")
+        # Refuser les PIN triviaux (lot A6) : tout identiques / séquences.
+        from api.services.pin_rules import weak_pin_reason
+        reason = weak_pin_reason(value)
+        if reason:
+            raise serializers.ValidationError(reason)
         return value
 
     def validate(self, attrs):

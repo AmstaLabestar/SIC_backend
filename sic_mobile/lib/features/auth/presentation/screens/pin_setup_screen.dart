@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/constants/app_text_styles.dart';
+import '../../../../core/utils/pin_rules.dart';
 import '../../../../core/widgets/sic_button.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/pin_header.dart';
@@ -31,6 +32,8 @@ class _PinSetupScreenState extends ConsumerState<PinSetupScreen> {
   String _pin = '';
   String _confirm = '';
   bool _mismatch = false;
+  // Message si le PIN saisi est trop simple (lot A6), sinon null.
+  String? _weakPin;
 
   final _password = TextEditingController();
   final _passwordKey = GlobalKey<FormState>();
@@ -50,6 +53,7 @@ class _PinSetupScreenState extends ConsumerState<PinSetupScreen> {
     if (_current.length >= _pinLength) return;
     setState(() {
       _mismatch = false;
+      _weakPin = null;
       if (_phase == _Phase.confirmPin) {
         _confirm += d;
       } else {
@@ -75,6 +79,7 @@ class _PinSetupScreenState extends ConsumerState<PinSetupScreen> {
     if (_current.isEmpty) return;
     setState(() {
       _mismatch = false;
+      _weakPin = null;
       if (_phase == _Phase.confirmPin) {
         _confirm = _confirm.substring(0, _confirm.length - 1);
       } else {
@@ -84,6 +89,16 @@ class _PinSetupScreenState extends ConsumerState<PinSetupScreen> {
   }
 
   void _goToConfirm() {
+    // Refuser un PIN trivial (lot A6) avant la confirmation.
+    final weak = weakPinReason(_pin);
+    if (weak != null) {
+      HapticFeedback.heavyImpact();
+      setState(() {
+        _weakPin = weak;
+        _pin = '';
+      });
+      return;
+    }
     setState(() {
       _phase = _Phase.confirmPin;
       _confirm = '';
@@ -173,16 +188,18 @@ class _PinSetupScreenState extends ConsumerState<PinSetupScreen> {
           onBack: _onBack,
           icon: isConfirm ? Icons.lock_outline_rounded : Icons.pin_outlined,
           title: isConfirm ? 'Confirmez votre code' : 'Creez votre code PIN',
-          subtitle: _mismatch
-              ? 'Les codes ne correspondent pas. Reessayez.'
-              : isConfirm
-                  ? 'Saisissez a nouveau votre code a 4 chiffres.'
-                  : 'Choisissez un code a 4 chiffres pour proteger\nvotre compte et valider vos operations.',
-          subtitleError: _mismatch,
+          subtitle: _weakPin != null
+              ? _weakPin!
+              : _mismatch
+                  ? 'Les codes ne correspondent pas. Reessayez.'
+                  : isConfirm
+                      ? 'Saisissez a nouveau votre code a 4 chiffres.'
+                      : 'Choisissez un code a 4 chiffres pour proteger\nvotre compte et valider vos operations.',
+          subtitleError: _mismatch || _weakPin != null,
           child: PinDots(
             count: _current.length,
             max: _pinLength,
-            error: _mismatch,
+            error: _mismatch || _weakPin != null,
             onLight: true,
           ),
         ),
