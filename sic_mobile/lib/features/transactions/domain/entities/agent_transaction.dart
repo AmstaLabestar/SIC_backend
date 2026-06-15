@@ -11,7 +11,6 @@ class AgentTransaction extends Equatable {
     required this.status,
     required this.amount,
     required this.commissionSic,
-    required this.agentBenefit,
     required this.createdAt,
     this.operatorCode,
     this.operatorName,
@@ -26,7 +25,6 @@ class AgentTransaction extends Equatable {
   final String status;
   final double amount;
   final double commissionSic;
-  final double agentBenefit;
   final DateTime createdAt;
 
   /// Operateur cible (depot/retrait). Nul pour un transfert entre puces.
@@ -47,7 +45,6 @@ class AgentTransaction extends Equatable {
         status,
         amount,
         commissionSic,
-        agentBenefit,
         createdAt,
         operatorCode,
         operatorName,

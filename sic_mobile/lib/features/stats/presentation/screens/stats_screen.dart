@@ -8,8 +8,8 @@ import '../../../../core/widgets/sic_error_widget.dart';
 import '../../../../core/widgets/sic_loading.dart';
 import '../../../dashboard/domain/entities/agent_summary.dart';
 import '../../../dashboard/presentation/providers/dashboard_provider.dart';
-import '../../../dashboard/presentation/widgets/benefit_chips.dart';
-import '../../../dashboard/presentation/widgets/benefit_summary_widget.dart';
+import '../../../dashboard/presentation/widgets/compensation_chips.dart';
+import '../../../dashboard/presentation/widgets/compensation_summary_widget.dart';
 
 class StatsScreen extends ConsumerWidget {
   const StatsScreen({super.key});
@@ -53,11 +53,11 @@ class _StatsContent extends StatelessWidget {
           style: AppTextStyles.bodyMedium,
         ),
         const SizedBox(height: AppSpacing.lg),
-        const _SectionTitle(title: 'Benefices'),
+        const _SectionTitle(title: 'Volume compense'),
         const SizedBox(height: AppSpacing.md),
-        const BenefitChips(),
+        const CompensationChips(),
         const SizedBox(height: AppSpacing.md),
-        BenefitSummaryWidget(summary: summary),
+        CompensationSummaryWidget(summary: summary),
         const SizedBox(height: AppSpacing.lg),
         _StatInfoTile(
           icon: Icons.receipt_long_outlined,

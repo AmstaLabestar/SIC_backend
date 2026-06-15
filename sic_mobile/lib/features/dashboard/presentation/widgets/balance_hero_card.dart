@@ -12,20 +12,20 @@ import '../../../../core/widgets/pressable.dart';
 /// Hero Card — carte du solde total (mockup valide).
 ///
 /// Gradient bleu -> bleu -> vert (145deg), cercles decoratifs, montant en
-/// CountUp, pill du benefice du jour, et bouton oeil pour masquer le solde.
+/// CountUp, pill du volume compense du jour, et bouton oeil pour masquer le solde.
 /// L'etat de visibilite est gere par le parent (Riverpod).
 class BalanceHeroCard extends StatelessWidget {
   const BalanceHeroCard({
     super.key,
     required this.totalBalance,
-    required this.todayBenefits,
+    required this.todayCompensated,
     required this.activeSimCount,
     required this.isVisible,
     required this.onToggleVisibility,
   });
 
   final double totalBalance;
-  final double todayBenefits;
+  final double todayCompensated;
   final int activeSimCount;
   final bool isVisible;
   final VoidCallback onToggleVisibility;
@@ -75,7 +75,7 @@ class BalanceHeroCard extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: AppSpacing.md),
-                _BenefitPill(amount: todayBenefits),
+                _CompensationPill(amount: todayCompensated),
               ],
             ),
           ],
@@ -179,8 +179,8 @@ class _EyeButton extends StatelessWidget {
   }
 }
 
-class _BenefitPill extends StatelessWidget {
-  const _BenefitPill({required this.amount});
+class _CompensationPill extends StatelessWidget {
+  const _CompensationPill({required this.amount});
 
   final double amount;
 
@@ -189,20 +189,20 @@ class _BenefitPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: AppColors.success.withValues(alpha: 0.20),
+        color: AppColors.onPrimary.withValues(alpha: 0.18),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.success.withValues(alpha: 0.35)),
+        border: Border.all(color: AppColors.onPrimary.withValues(alpha: 0.30)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.arrow_upward_rounded,
-              color: AppColors.success, size: 14),
+          const Icon(Icons.swap_horiz_rounded,
+              color: AppColors.onPrimary, size: 14),
           const SizedBox(width: 4),
           Text(
-            '+ ${FcfaFormatter.format(amount)} aujourd\'hui',
+            '${FcfaFormatter.format(amount)} compense aujourd\'hui',
             style: AppTextStyles.caption.copyWith(
-              color: AppColors.success,
+              color: AppColors.onPrimary,
               fontWeight: FontWeight.w700,
             ),
           ),

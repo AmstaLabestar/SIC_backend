@@ -23,7 +23,6 @@ void main() {
       expect(t.status, 'PENDING');
       expect(t.amount, 5000);
       expect(t.commissionSic, 50);
-      expect(t.agentBenefit, 120);
       expect(t.operatorCode, 'OM');
       expect(t.operatorName, 'Orange Money');
       expect(t.isPending, isTrue);
@@ -54,18 +53,16 @@ void main() {
         'transaction_id': 'tx-9',
         'amount': '5000',
         'commission_sic': '50',
-        'agent_benefit': '120',
         'status': 'PENDING',
         'created_at': '2026-06-12T10:00:00Z',
       });
       expect(r.transactionId, 'tx-9');
       expect(r.amount, 5000);
       expect(r.commissionSic, 50);
-      expect(r.agentBenefit, 120);
       expect(r.status, 'PENDING');
     });
 
-    test('transfert : commission/benefice absents -> null', () {
+    test('transfert : commission absente -> null', () {
       final r = OperationResultModel.fromJson({
         'transaction_id': 'tx-10',
         'amount': '2000',
@@ -73,7 +70,6 @@ void main() {
         'created_at': '2026-06-12T10:00:00Z',
       });
       expect(r.commissionSic, isNull);
-      expect(r.agentBenefit, isNull);
     });
   });
 }

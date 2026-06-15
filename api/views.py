@@ -469,7 +469,7 @@ class TransactionViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, views
                 'transaction_id': str(tx.id),
                 'amount': str(tx.amount),
                 'commission_sic': str(tx.commission_sic),
-                'agent_benefit': str(tx.agent_benefit),
+                'is_compensated': tx.is_compensated,
                 'status': tx.status,
                 'created_at': tx.created_at.isoformat()
             }, status=status.HTTP_201_CREATED)
@@ -574,11 +574,11 @@ class TransactionViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, views
                 tx.status = 'COMPLETED'
                 tx.save()
 
-                # Log de la commission de l'agent
+                # Log de la commission SIC
                 log_activity(
                     agent=agent,
                     action="TX_WITHDRAW_COMPLETED",
-                    description=f"Retrait de {tx.amount} FCFA complété. Commission: {tx.agent_benefit} FCFA",
+                    description=f"Retrait de {tx.amount} FCFA complété. Commission SIC: {tx.commission_sic} FCFA",
                     level="SUCCESS",
                     ip_address=request.META.get('REMOTE_ADDR')
                 )
@@ -588,7 +588,7 @@ class TransactionViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, views
                 'transaction_id': str(tx.id),
                 'amount': str(tx.amount),
                 'commission_sic': str(tx.commission_sic),
-                'agent_benefit': str(tx.agent_benefit),
+                'is_compensated': tx.is_compensated,
                 'status': tx.status,
                 'created_at': tx.created_at.isoformat()
             }, status=status.HTTP_201_CREATED)
@@ -819,7 +819,6 @@ class CommissionInfoView(generics.GenericAPIView):
             return Response({
                 'type': tx_type,
                 'sic_rate': float(r['sic_rate'] * 100),
-                'agent_rate': float(r['agent_rate'] * 100),
                 'min_amount': settings.MIN_TRANSACTION_AMOUNT,
                 'max_amount': settings.MAX_TRANSACTION_AMOUNT
             })
@@ -830,7 +829,6 @@ class CommissionInfoView(generics.GenericAPIView):
             r = CommissionCalculator.get_rate(t)
             rates[t] = {
                 'sic_rate': float(r['sic_rate'] * 100),
-                'agent_rate': float(r['agent_rate'] * 100),
             }
         return Response({
             'commissions': rates,

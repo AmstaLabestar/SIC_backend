@@ -7,7 +7,6 @@ class OperationResultModel extends OperationResult {
     required super.status,
     required super.createdAt,
     super.commissionSic,
-    super.agentBenefit,
     super.message,
   });
 
@@ -21,8 +20,6 @@ class OperationResultModel extends OperationResult {
           DateTime.now(),
       commissionSic:
           json['commission_sic'] == null ? null : _toDouble(json['commission_sic']),
-      agentBenefit:
-          json['agent_benefit'] == null ? null : _toDouble(json['agent_benefit']),
       message: json['message']?.toString(),
     );
   }

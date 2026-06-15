@@ -9,7 +9,7 @@ import '../../domain/repositories/dashboard_repository.dart';
 import '../../domain/usecases/get_dashboard_summary.dart';
 import '../../domain/usecases/refresh_balance.dart';
 
-enum DashboardBenefitPeriod { today, week, month }
+enum DashboardPeriod { today, week, month }
 
 final dashboardRemoteDatasourceProvider = Provider<DashboardRemoteDatasource>(
   (ref) => DashboardRemoteDatasource(ref.watch(dioProvider)),
@@ -27,8 +27,8 @@ final refreshBalanceProvider = Provider<RefreshBalance>((ref) {
   return RefreshBalance(ref.watch(dashboardRepositoryProvider));
 });
 
-final selectedBenefitPeriodProvider = StateProvider<DashboardBenefitPeriod>(
-  (ref) => DashboardBenefitPeriod.today,
+final selectedPeriodProvider = StateProvider<DashboardPeriod>(
+  (ref) => DashboardPeriod.today,
 );
 
 /// Visibilite du solde total de la hero card (defaut: visible).

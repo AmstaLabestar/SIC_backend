@@ -4,7 +4,7 @@ import '../../../../core/constants/api_constants.dart';
 import '../../../../core/network/operator_mapping.dart';
 import '../models/agent_summary_model.dart';
 import '../models/balance_summary_model.dart';
-import '../models/benefit_period_model.dart';
+import '../models/compensation_volume_model.dart';
 
 /// Construit le resume du dashboard a partir du backend reel :
 /// - `/auth/profile/` -> agent + puces (soldes) ;
@@ -31,7 +31,7 @@ class DashboardRemoteDatasource {
         .toList();
     final total = balances.fold<double>(0, (sum, b) => sum + b.balance);
 
-    final (countToday, benefitToday) = await _todayTransactions();
+    final stats = await _compensationStats();
 
     final firstName = profile['first_name'] as String? ?? '';
     final lastName = profile['last_name'] as String? ?? '';
@@ -45,14 +45,14 @@ class DashboardRemoteDatasource {
       agentCode: agentCode,
       agentName: name.isEmpty ? 'Agent SIC' : name,
       totalBalance: total,
-      benefits: BenefitPeriodModel(
-        today: benefitToday,
-        week: 0,
-        month: 0,
-        total: 0,
+      compensation: CompensationVolumeModel(
+        today: stats.volToday,
+        week: stats.volWeek,
+        month: stats.volMonth,
+        total: stats.volTotal,
       ),
       balances: balances,
-      transactionCountToday: countToday,
+      transactionCountToday: stats.countToday,
       hasUnreadNotifications: balances.any((b) => b.isLow || b.isEmpty),
       banners: const [],
     );
@@ -101,30 +101,50 @@ class DashboardRemoteDatasource {
     );
   }
 
-  Future<(int, double)> _todayTransactions() async {
+  /// Agrege, depuis l'historique recent, le **volume compense** par periode
+  /// (somme des montants des transactions `is_compensated`) + le nombre
+  /// d'operations du jour. Best-effort : sur une page de resultats.
+  Future<_CompensationStats> _compensationStats() async {
     try {
       final response = await _dio.get<Map<String, dynamic>>(
         ApiConstants.transactions,
       );
       final results = (response.data?['results'] as List<dynamic>?) ?? const [];
       final now = DateTime.now();
-      var count = 0;
-      var benefit = 0.0;
+      var countToday = 0;
+      var volToday = 0.0, volWeek = 0.0, volMonth = 0.0, volTotal = 0.0;
       for (final item in results) {
         final txn = item as Map<String, dynamic>;
         final created = DateTime.tryParse(
           txn['created_at']?.toString() ?? '',
         )?.toLocal();
-        if (created != null && _isSameDay(created, now)) {
-          count++;
-          benefit += _toDouble(txn['agent_benefit']);
+        if (created != null && _isSameDay(created, now)) countToday++;
+
+        if (txn['is_compensated'] == true) {
+          final amount = _toDouble(txn['amount']);
+          volTotal += amount;
+          if (created != null) {
+            if (_isSameDay(created, now)) volToday += amount;
+            if (now.difference(created).inDays < 7) volWeek += amount;
+            if (created.year == now.year && created.month == now.month) {
+              volMonth += amount;
+            }
+          }
         }
       }
-      return (count, benefit);
+      return _CompensationStats(
+        countToday: countToday,
+        volToday: volToday,
+        volWeek: volWeek,
+        volMonth: volMonth,
+        volTotal: volTotal,
+      );
     } catch (_) {
       // Best-effort : si l'historique echoue (ex. KYC en attente), on n'empeche
       // pas l'affichage du dashboard.
-      return (0, 0.0);
+      return const _CompensationStats(
+        countToday: 0, volToday: 0, volWeek: 0, volMonth: 0, volTotal: 0,
+      );
     }
   }
 
@@ -156,4 +176,21 @@ class DashboardRemoteDatasource {
 
   static bool _isSameDay(DateTime a, DateTime b) =>
       a.year == b.year && a.month == b.month && a.day == b.day;
+}
+
+/// Agregats de compensation (volume sauve par periode) + nombre d'ops du jour.
+class _CompensationStats {
+  const _CompensationStats({
+    required this.countToday,
+    required this.volToday,
+    required this.volWeek,
+    required this.volMonth,
+    required this.volTotal,
+  });
+
+  final int countToday;
+  final double volToday;
+  final double volWeek;
+  final double volMonth;
+  final double volTotal;
 }

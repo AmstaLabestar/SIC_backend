@@ -70,7 +70,7 @@ class _DashboardContent extends ConsumerWidget {
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
             child: BalanceHeroCard(
               totalBalance: summary.totalBalance,
-              todayBenefits: summary.benefits.today,
+              todayCompensated: summary.compensation.today,
               activeSimCount: summary.activeSimCount,
               isVisible: isBalanceVisible,
               onToggleVisibility: () {

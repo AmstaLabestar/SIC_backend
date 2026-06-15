@@ -1,6 +1,6 @@
 import '../../domain/entities/agent_summary.dart';
 import 'balance_summary_model.dart';
-import 'benefit_period_model.dart';
+import 'compensation_volume_model.dart';
 import 'promo_banner_model.dart';
 
 class AgentSummaryModel extends AgentSummary {
@@ -8,7 +8,7 @@ class AgentSummaryModel extends AgentSummary {
     required super.agentCode,
     required super.agentName,
     required super.totalBalance,
-    required super.benefits,
+    required super.compensation,
     required super.balances,
     required super.transactionCountToday,
     super.hasUnreadNotifications,
@@ -23,8 +23,8 @@ class AgentSummaryModel extends AgentSummary {
       agentCode: json['agent_code'] as String,
       agentName: json['agent_name'] as String,
       totalBalance: (json['total_balance'] as num).toDouble(),
-      benefits: BenefitPeriodModel.fromJson(
-        json['benefits'] as Map<String, dynamic>,
+      compensation: CompensationVolumeModel.fromJson(
+        json['compensation'] as Map<String, dynamic>,
       ),
       balances: balancesJson
           .map(
@@ -60,7 +60,7 @@ class AgentSummaryModel extends AgentSummary {
       agentCode: 'AGT-0042',
       agentName: 'Kone Moussa',
       totalBalance: totalBalance,
-      benefits: BenefitPeriodModel.mock(),
+      compensation: CompensationVolumeModel.mock(),
       balances: balances,
       transactionCountToday: 8,
       hasUnreadNotifications: true,
@@ -73,7 +73,7 @@ class AgentSummaryModel extends AgentSummary {
       'agent_code': agentCode,
       'agent_name': agentName,
       'total_balance': totalBalance,
-      'benefits': (benefits as BenefitPeriodModel).toJson(),
+      'compensation': (compensation as CompensationVolumeModel).toJson(),
       'balances': balances
           .map((balance) => (balance as BalanceSummaryModel).toJson())
           .toList(),

@@ -23,11 +23,9 @@ class CommissionCalculatorTest(TestCase):
         result = CommissionCalculator.calculate(Decimal('10000'), 'DEPOT')
 
         self.assertIn('commission_sic', result)
-        self.assertIn('agent_benefit', result)
+        self.assertNotIn('agent_benefit', result)  # supprimé (lot C4)
         self.assertIsInstance(result['commission_sic'], Decimal)
-        self.assertIsInstance(result['agent_benefit'], Decimal)
         self.assertGreater(result['commission_sic'], 0)
-        self.assertGreaterEqual(result['agent_benefit'], 0)
 
     def test_calculate_withdraw_commission(self):
         """Test le calcul de commission pour un retrait."""
@@ -35,14 +33,12 @@ class CommissionCalculatorTest(TestCase):
 
         # Les retraits ont généralement des taux différents
         self.assertIsInstance(result['commission_sic'], Decimal)
-        self.assertIsInstance(result['agent_benefit'], Decimal)
 
     def test_calculate_zero_amount(self):
         """Test le calcul avec un montant de 0."""
         result = CommissionCalculator.calculate(Decimal('0'), 'DEPOT')
 
         self.assertEqual(result['commission_sic'], Decimal('0'))
-        self.assertEqual(result['agent_benefit'], Decimal('0'))
 
     def test_calculate_from_net(self):
         """Test le calcul inverse (du net au brut)."""
@@ -57,7 +53,6 @@ class CommissionCalculatorTest(TestCase):
         rates = CommissionCalculator.get_rate('UNKNOWN')
 
         self.assertIn('sic_rate', rates)
-        self.assertIn('agent_rate', rates)
 
 
 class TransactionValidatorTest(TestCase):
@@ -232,7 +227,6 @@ class CompensationEngineTest(TestCase):
         self.assertEqual(tx.status, 'PENDING')
         self.assertEqual(tx.amount, Decimal('5000'))
         self.assertGreaterEqual(tx.commission_sic, 0)
-        self.assertGreaterEqual(tx.agent_benefit, 0)
 
     def test_create_withdrawal_transaction(self):
         """Test la création d'un retrait."""

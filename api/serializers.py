@@ -732,7 +732,7 @@ class TransactionSerializer(serializers.ModelSerializer):
             'id', 'agent_name', 'type',
             'status',
             'target_operator', 'target_phone_number',
-            'amount', 'commission_sic', 'agent_benefit',
+            'amount', 'commission_sic', 'fee',
             'is_compensated',
             'compensation_details',
             'created_at', 'updated_at'

@@ -8,7 +8,6 @@ class AgentTransactionModel extends AgentTransaction {
     required super.status,
     required super.amount,
     required super.commissionSic,
-    required super.agentBenefit,
     required super.createdAt,
     super.operatorCode,
     super.operatorName,
@@ -32,7 +31,6 @@ class AgentTransactionModel extends AgentTransaction {
       status: json['status']?.toString() ?? 'PENDING',
       amount: _toDouble(json['amount']),
       commissionSic: _toDouble(json['commission_sic']),
-      agentBenefit: _toDouble(json['agent_benefit']),
       createdAt: DateTime.tryParse(json['created_at']?.toString() ?? '')
               ?.toLocal() ??
           DateTime.now(),

@@ -8,7 +8,6 @@ class OperationResult extends Equatable {
     required this.status,
     required this.createdAt,
     this.commissionSic,
-    this.agentBenefit,
     this.message,
   });
 
@@ -21,7 +20,6 @@ class OperationResult extends Equatable {
 
   /// Absents pour un transfert (conversion entre puces).
   final double? commissionSic;
-  final double? agentBenefit;
   final String? message;
 
   @override
@@ -31,7 +29,6 @@ class OperationResult extends Equatable {
         status,
         createdAt,
         commissionSic,
-        agentBenefit,
         message,
       ];
 }

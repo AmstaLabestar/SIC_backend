@@ -1,15 +1,15 @@
-import '../../domain/entities/benefit_period.dart';
+import '../../domain/entities/compensation_volume.dart';
 
-class BenefitPeriodModel extends BenefitPeriod {
-  const BenefitPeriodModel({
+class CompensationVolumeModel extends CompensationVolume {
+  const CompensationVolumeModel({
     required super.today,
     required super.week,
     required super.month,
     required super.total,
   });
 
-  factory BenefitPeriodModel.fromJson(Map<String, dynamic> json) {
-    return BenefitPeriodModel(
+  factory CompensationVolumeModel.fromJson(Map<String, dynamic> json) {
+    return CompensationVolumeModel(
       today: (json['today'] as num).toDouble(),
       week: (json['week'] as num).toDouble(),
       month: (json['month'] as num).toDouble(),
@@ -17,12 +17,12 @@ class BenefitPeriodModel extends BenefitPeriod {
     );
   }
 
-  factory BenefitPeriodModel.mock() {
-    return const BenefitPeriodModel(
-      today: 12500,
-      week: 87300,
-      month: 312000,
-      total: 1250000,
+  factory CompensationVolumeModel.mock() {
+    return const CompensationVolumeModel(
+      today: 120000,
+      week: 540000,
+      month: 1850000,
+      total: 4200000,
     );
   }
 

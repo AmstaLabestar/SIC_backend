@@ -141,10 +141,11 @@ class Transaction(models.Model):
     target_phone_number = models.CharField(max_length=50, null=True, blank=True)
     
     amount = models.DecimalField(max_digits=12, decimal_places=2)
+    # SIC preleve une commission unique par transaction (lot C4). L'agent ne
+    # gagne rien via SIC ; son gain = volume sauve par la compensation (calcule
+    # cote app a partir de is_compensated), pas un montant stocke ici.
     commission_sic = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
-    agent_benefit = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
-    # Frais factures au client (compte CLIENT). Les agents gagnent une commission
-    # (agent_benefit) ; les clients paient des frais (fee). Defaut 0.
+    # Frais factures au client (compte CLIENT) ; bareme defini en piste D. Defaut 0.
     fee = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
 
     is_compensated = models.BooleanField(default=False)

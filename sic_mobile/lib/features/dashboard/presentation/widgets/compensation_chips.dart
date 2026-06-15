@@ -7,21 +7,22 @@ import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/constants/app_text_styles.dart';
 import '../providers/dashboard_provider.dart';
 
-class BenefitChips extends ConsumerWidget {
-  const BenefitChips({super.key});
+/// Selecteur de periode (jour/semaine/mois) pour le volume compense (lot C4).
+class CompensationChips extends ConsumerWidget {
+  const CompensationChips({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final selectedPeriod = ref.watch(selectedBenefitPeriodProvider);
+    final selectedPeriod = ref.watch(selectedPeriodProvider);
 
     return Row(
-      children: DashboardBenefitPeriod.values.map((period) {
+      children: DashboardPeriod.values.map((period) {
         final isSelected = selectedPeriod == period;
 
         return Expanded(
           child: Padding(
             padding: EdgeInsets.only(
-              right: period == DashboardBenefitPeriod.month ? 0 : AppSpacing.sm,
+              right: period == DashboardPeriod.month ? 0 : AppSpacing.sm,
             ),
             child: ChoiceChip(
               selected: isSelected,
@@ -37,7 +38,7 @@ class BenefitChips extends ConsumerWidget {
               ),
               backgroundColor: AppColors.surface,
               onSelected: (_) {
-                ref.read(selectedBenefitPeriodProvider.notifier).state = period;
+                ref.read(selectedPeriodProvider.notifier).state = period;
               },
             ).animate(target: isSelected ? 1 : 0).scaleXY(
                   begin: 1,
@@ -50,11 +51,11 @@ class BenefitChips extends ConsumerWidget {
     );
   }
 
-  String _label(DashboardBenefitPeriod period) {
+  String _label(DashboardPeriod period) {
     return switch (period) {
-      DashboardBenefitPeriod.today => 'Jour',
-      DashboardBenefitPeriod.week => 'Semaine',
-      DashboardBenefitPeriod.month => 'Mois',
+      DashboardPeriod.today => 'Jour',
+      DashboardPeriod.week => 'Semaine',
+      DashboardPeriod.month => 'Mois',
     };
   }
 }

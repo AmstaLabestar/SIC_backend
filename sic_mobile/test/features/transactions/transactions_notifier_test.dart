@@ -70,7 +70,6 @@ AgentTransaction _txn(TransactionKind kind) => AgentTransaction(
       status: 'PENDING',
       amount: 1000,
       commissionSic: 0,
-      agentBenefit: 0,
       createdAt: DateTime(2026, 6, 12),
     );
 

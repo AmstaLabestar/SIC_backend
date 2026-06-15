@@ -19,60 +19,46 @@ class CommissionCalculator:
     """
     Calculateur de commissions pour les transactions SIC.
 
-    Les commissions sont calculées selon les taux configurés dans settings.py:
-    - commission_sic_rate: pourcentage pour la plateforme SIC
-    - agent_benefit_rate: pourcentage pour l'agent
+    SIC prélève une **commission unique** par transaction (lot C4) :
+    - commission_sic_rate: pourcentage prélevé par la plateforme SIC.
 
-    Exemple: Pour un dépôt de 10000 FCFA avec taux SIC=1% et agent=0.5%:
-    - commission_sic = 10000 * 1% = 100 FCFA
-    - agent_benefit = 10000 * 0.5% = 50 FCFA
+    L'agent ne gagne rien *via* SIC (sa marge vient des opérateurs) : il n'y a
+    donc plus de part « agent_benefit ».
+
+    Exemple: pour un dépôt de 10000 FCFA avec taux SIC=1% → commission_sic = 100 FCFA.
     """
 
     @staticmethod
     def get_rate(tx_type):
-        """Récupère les taux de commission pour un type de transaction."""
+        """Récupère le taux de commission SIC pour un type de transaction."""
         rates = settings.COMMISSION_RATES.get(tx_type.upper(), {})
         return {
             'sic_rate': Decimal(str(rates.get('commission_sic_rate', 1.0))) / 100,
-            'agent_rate': Decimal(str(rates.get('agent_benefit_rate', 0.5))) / 100,
         }
 
     @classmethod
     def calculate(cls, amount, tx_type):
         """
-        Calcule les commissions pour un montant et type de transaction.
-
-        Args:
-            amount: Decimal - Montant de la transaction
-            tx_type: str - Type de transaction (DEPOT, RETRAIT, etc.)
+        Calcule la commission SIC pour un montant et type de transaction.
 
         Returns:
-            dict avec 'commission_sic', 'agent_benefit', 'net_amount'
+            dict avec 'commission_sic', 'total_commission', 'net_amount'
         """
         amount = Decimal(str(amount))
         rates = cls.get_rate(tx_type)
 
         commission_sic = (amount * rates['sic_rate']).quantize(Decimal('1'), rounding=ROUND_HALF_UP)
-        agent_benefit = (amount * rates['agent_rate']).quantize(Decimal('1'), rounding=ROUND_HALF_UP)
-
-        # Le montant net après commissions est la somme des deux
-        total_commission = commission_sic + agent_benefit
 
         return {
             'commission_sic': commission_sic,
-            'agent_benefit': agent_benefit,
-            'total_commission': total_commission,
-            'net_amount': amount,  # Le montant total est traité, les commissions sont dérivées
+            'total_commission': commission_sic,
+            'net_amount': amount,
         }
 
     @classmethod
     def calculate_from_net(cls, net_amount, tx_type):
         """
-        Calcule les commissions à partir du montant net desired (inverse du calcul).
-
-        Args:
-            net_amount: Decimal - Montant que l'on veut recevoir
-            tx_type: str - Type de transaction
+        Calcule la commission à partir du montant net désiré (inverse du calcul).
 
         Returns:
             dict avec les montants ajustés
@@ -80,22 +66,19 @@ class CommissionCalculator:
         net_amount = Decimal(str(net_amount))
         rates = cls.get_rate(tx_type)
 
-        # Si le montant net est X, le montant brut = X / (1 - taux_total)
-        total_rate = rates['sic_rate'] + rates['agent_rate']
+        total_rate = rates['sic_rate']
 
         if total_rate >= Decimal('1'):
             raise ValueError("Les taux de commission ne peuvent pas être >= 100%")
 
         gross_amount = (net_amount / (Decimal('1') - total_rate)).quantize(Decimal('1'), rounding=ROUND_HALF_UP)
         commission_sic = (gross_amount * rates['sic_rate']).quantize(Decimal('1'), rounding=ROUND_HALF_UP)
-        agent_benefit = (gross_amount * rates['agent_rate']).quantize(Decimal('1'), rounding=ROUND_HALF_UP)
 
         return {
             'gross_amount': gross_amount,
             'commission_sic': commission_sic,
-            'agent_benefit': agent_benefit,
             'net_amount': net_amount,
-            'total_commission': commission_sic + agent_benefit,
+            'total_commission': commission_sic,
         }
 
 
@@ -352,7 +335,6 @@ class CompensationEngine:
             target_operator=target_operator.upper(),
             target_phone_number=target_phone_number,
             commission_sic=commissions['commission_sic'],
-            agent_benefit=commissions['agent_benefit'],
             is_compensated=is_compensated
         )
 
@@ -432,7 +414,6 @@ class CompensationEngine:
             target_operator=target_operator.upper(),
             target_phone_number=target_phone_number,
             commission_sic=commissions['commission_sic'],
-            agent_benefit=commissions['agent_benefit'],
             is_compensated=False  # Pas de compensation - l'agent gère le cash
         )
 
@@ -493,7 +474,6 @@ class CompensationEngine:
             target_operator=target_puce.operator,
             target_phone_number=str(target_puce.id),
             commission_sic=commissions['commission_sic'],
-            agent_benefit=commissions['agent_benefit'],
             is_compensated=False
         )
 

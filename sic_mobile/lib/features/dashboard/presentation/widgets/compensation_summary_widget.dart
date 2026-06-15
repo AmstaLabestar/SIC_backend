@@ -9,18 +9,20 @@ import '../../../../core/widgets/sic_amount_display.dart';
 import '../../domain/entities/agent_summary.dart';
 import '../providers/dashboard_provider.dart';
 
-class BenefitSummaryWidget extends ConsumerWidget {
-  const BenefitSummaryWidget({super.key, required this.summary});
+/// Volume d'operations sauvees par la compensation, pour la periode choisie
+/// (lot C4). Mesure d'activite, pas une marge de l'agent.
+class CompensationSummaryWidget extends ConsumerWidget {
+  const CompensationSummaryWidget({super.key, required this.summary});
 
   final AgentSummary summary;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final period = ref.watch(selectedBenefitPeriodProvider);
+    final period = ref.watch(selectedPeriodProvider);
     final amount = switch (period) {
-      DashboardBenefitPeriod.today => summary.benefits.today,
-      DashboardBenefitPeriod.week => summary.benefits.week,
-      DashboardBenefitPeriod.month => summary.benefits.month,
+      DashboardPeriod.today => summary.compensation.today,
+      DashboardPeriod.week => summary.compensation.week,
+      DashboardPeriod.month => summary.compensation.month,
     };
 
     return Container(
@@ -34,13 +36,13 @@ class BenefitSummaryWidget extends ConsumerWidget {
       child: Column(
         children: [
           Text(
-            'Benefices ${_label(period)}',
+            'Volume compense ${_label(period)}',
             style: AppTextStyles.caption,
           ),
           const SizedBox(height: AppSpacing.sm),
           SicAmountDisplay(
             amount: amount,
-            color: AppColors.success,
+            color: AppColors.primary,
             size: SicAmountSize.medium,
           ),
         ],
@@ -48,11 +50,11 @@ class BenefitSummaryWidget extends ConsumerWidget {
     ).animate().fadeIn(duration: 260.ms).slideY(begin: 0.04, end: 0);
   }
 
-  String _label(DashboardBenefitPeriod period) {
+  String _label(DashboardPeriod period) {
     return switch (period) {
-      DashboardBenefitPeriod.today => 'du jour',
-      DashboardBenefitPeriod.week => 'de la semaine',
-      DashboardBenefitPeriod.month => 'du mois',
+      DashboardPeriod.today => 'du jour',
+      DashboardPeriod.week => 'de la semaine',
+      DashboardPeriod.month => 'du mois',
     };
   }
 }

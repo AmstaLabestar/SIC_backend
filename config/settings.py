@@ -434,19 +434,15 @@ LOGGING = {
 COMMISSION_RATES = {
     'DEPOT': {
         'commission_sic_rate': float(get_env('COMMISSION_DEPOT_SIC', '1.0')),  # % pour SIC
-        'agent_benefit_rate': float(get_env('COMMISSION_DEPOT_AGENT', '0.5')), # % pour l'agent
     },
     'RETRAIT': {
         'commission_sic_rate': float(get_env('COMMISSION_RETRAIT_SIC', '1.5')),
-        'agent_benefit_rate': float(get_env('COMMISSION_RETRAIT_AGENT', '0.5')),
     },
     'TRANSFERT': {
         'commission_sic_rate': float(get_env('COMMISSION_TRANSFERT_SIC', '0.5')),
-        'agent_benefit_rate': float(get_env('COMMISSION_TRANSFERT_AGENT', '0.0')),
     },
     'SWAP': {
         'commission_sic_rate': float(get_env('COMMISSION_SWAP_SIC', '0.5')),
-        'agent_benefit_rate': float(get_env('COMMISSION_SWAP_AGENT', '0.0')),
     },
 }
 

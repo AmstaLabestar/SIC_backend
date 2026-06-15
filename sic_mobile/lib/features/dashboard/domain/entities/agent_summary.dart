@@ -1,7 +1,7 @@
 import 'package:equatable/equatable.dart';
 
 import 'balance_summary.dart';
-import 'benefit_period.dart';
+import 'compensation_volume.dart';
 import 'promo_banner.dart';
 
 class AgentSummary extends Equatable {
@@ -9,7 +9,7 @@ class AgentSummary extends Equatable {
     required this.agentCode,
     required this.agentName,
     required this.totalBalance,
-    required this.benefits,
+    required this.compensation,
     required this.balances,
     required this.transactionCountToday,
     this.hasUnreadNotifications = false,
@@ -19,7 +19,7 @@ class AgentSummary extends Equatable {
   final String agentCode;
   final String agentName;
   final double totalBalance;
-  final BenefitPeriod benefits;
+  final CompensationVolume compensation;
   final List<BalanceSummary> balances;
   final int transactionCountToday;
   final bool hasUnreadNotifications;
@@ -44,7 +44,7 @@ class AgentSummary extends Equatable {
     String? agentCode,
     String? agentName,
     double? totalBalance,
-    BenefitPeriod? benefits,
+    CompensationVolume? compensation,
     List<BalanceSummary>? balances,
     int? transactionCountToday,
     bool? hasUnreadNotifications,
@@ -60,7 +60,7 @@ class AgentSummary extends Equatable {
             0,
             (total, balance) => total + balance.balance,
           ),
-      benefits: benefits ?? this.benefits,
+      compensation: compensation ?? this.compensation,
       balances: nextBalances,
       transactionCountToday:
           transactionCountToday ?? this.transactionCountToday,
@@ -75,7 +75,7 @@ class AgentSummary extends Equatable {
         agentCode,
         agentName,
         totalBalance,
-        benefits,
+        compensation,
         balances,
         transactionCountToday,
         hasUnreadNotifications,

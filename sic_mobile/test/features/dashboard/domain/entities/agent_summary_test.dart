@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sic_mobile/features/dashboard/domain/entities/agent_summary.dart';
 import 'package:sic_mobile/features/dashboard/domain/entities/balance_summary.dart';
-import 'package:sic_mobile/features/dashboard/domain/entities/benefit_period.dart';
+import 'package:sic_mobile/features/dashboard/domain/entities/compensation_volume.dart';
 
 BalanceSummary _balance({required double balance, bool isLow = false}) {
   return BalanceSummary(
@@ -20,7 +20,8 @@ AgentSummary _summary(List<BalanceSummary> balances) {
     agentCode: 'AGT-0042',
     agentName: 'Kone Moussa',
     totalBalance: balances.fold(0, (s, b) => s + b.balance),
-    benefits: const BenefitPeriod(today: 0, week: 0, month: 0, total: 0),
+    compensation:
+        const CompensationVolume(today: 0, week: 0, month: 0, total: 0),
     balances: balances,
     transactionCountToday: 0,
   );

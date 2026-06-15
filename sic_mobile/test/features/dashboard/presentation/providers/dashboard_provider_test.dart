@@ -86,9 +86,9 @@ void main() {
     final container = ProviderContainer();
     addTearDown(container.dispose);
 
-    final selectedPeriod = container.read(selectedBenefitPeriodProvider);
+    final selectedPeriod = container.read(selectedPeriodProvider);
 
-    expect(selectedPeriod, DashboardBenefitPeriod.today);
+    expect(selectedPeriod, DashboardPeriod.today);
   });
 
   test('updateSim envoie l\'id au repo et retourne null en cas de succes',

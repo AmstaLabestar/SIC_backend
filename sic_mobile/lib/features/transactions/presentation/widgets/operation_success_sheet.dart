@@ -81,8 +81,6 @@ class OperationSuccessSheet extends StatelessWidget {
           _row('Statut', pending ? 'En attente de confirmation' : result.status),
           if (result.commissionSic != null)
             _row('Commission SIC', FcfaFormatter.format(result.commissionSic!)),
-          if (result.agentBenefit != null)
-            _row('Votre benefice', FcfaFormatter.format(result.agentBenefit!)),
           _row('Reference', _shortId(result.transactionId)),
           const SizedBox(height: AppSpacing.lg),
           FilledButton(
