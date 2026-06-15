@@ -1,0 +1,32 @@
+name: Flutter CI
+
+# Workflow du depot perso (racine = sic_mobile/) : analyse + tests Flutter.
+# Au sein du depot collab ce fichier n'est pas a la racine .github/ et n'est
+# donc pas declenche la-bas (la CI complete back+front vit dans /.github/).
+on:
+  push:
+    branches: [main, feature/backend-integration]
+  pull_request:
+    branches: [main, feature/backend-integration]
+
+jobs:
+  flutter:
+    name: App (Flutter)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Recuperer les dependances
+        run: flutter pub get
+
+      - name: Analyse statique
+        run: flutter analyze
+
+      - name: Tests
+        run: flutter test

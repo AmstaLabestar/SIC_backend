@@ -174,17 +174,18 @@ class CompensationEngineTest(TestCase):
             first_name='Test',
             last_name='Agent'
         )
-        # Créer plusieurs puces avec soldes
+        # Créer plusieurs puces avec soldes (numéros distincts : Puce.phone_number
+        # est unique depuis la migration 0007).
         self.puce1 = Puce.objects.create(
             agent=self.agent,
             operator='ORANGE',
-            phone_number='+224621234567',
+            phone_number='+224620000001',
             balance=Decimal('10000.00')
         )
         self.puce2 = Puce.objects.create(
             agent=self.agent,
             operator='MOOV',
-            phone_number='+224621234567',
+            phone_number='+224620000002',
             balance=Decimal('5000.00')
         )
 
@@ -436,17 +437,17 @@ class DashboardViewsTest(TestCase):
         )
 
     def test_admin_login(self):
-        """Test la connexion admin."""
-        response = self.client.post('/dashboard/login/', {
+        """Test la connexion admin (dashboard monte a la racine : /login/)."""
+        response = self.client.post('/login/', {
             'username': 'admin',
             'password': 'Adminpass123!'
         })
         self.assertIn(response.status_code, [status.HTTP_200_OK, status.HTTP_302_FOUND])
 
     def test_admin_dashboard_access(self):
-        """Test l'accès au dashboard admin."""
+        """Test l'accès au dashboard admin (home a la racine : /)."""
         self.client.login(username='admin', password='Adminpass123!')
-        response = self.client.get('/dashboard/')
+        response = self.client.get('/')
         self.assertIn(response.status_code, [status.HTTP_200_OK, status.HTTP_302_FOUND])
 
 

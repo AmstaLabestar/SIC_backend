@@ -1,0 +1,79 @@
+name: CI
+
+# Barriere de tests : backend Django + app Flutter.
+# Se declenche sur push et pull request vers les branches principales.
+on:
+  push:
+    branches: [main, feature/backend-integration]
+  pull_request:
+    branches: [main, feature/backend-integration]
+
+jobs:
+  backend:
+    name: Backend (Django)
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: sic_db
+          POSTGRES_USER: sic_user
+          POSTGRES_PASSWORD: sic_pass
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://sic_user:sic_pass@localhost:5432/sic_db
+      USE_DOCKER: 'True'
+      # DEBUG=True en CI : Celery s'execute en mode eager (pas de broker Redis
+      # requis) et l'email part vers la console. Suffisant pour la suite de tests.
+      DEBUG: 'True'
+      SECRET_KEY: ci-secret-not-for-production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Installer les dependances
+        run: pip install -r requirements.txt
+
+      - name: Verifier l'absence de migration en attente
+        run: python manage.py makemigrations --check --dry-run
+
+      - name: Lancer les tests
+        run: python manage.py test --verbosity=2
+
+  flutter:
+    name: App (Flutter)
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: sic_mobile
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Recuperer les dependances
+        run: flutter pub get
+
+      - name: Analyse statique
+        run: flutter analyze
+
+      - name: Tests
+        run: flutter test
