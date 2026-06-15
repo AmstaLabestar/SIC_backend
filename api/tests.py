@@ -936,3 +936,94 @@ class PinStrengthTest(APITestCase):
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.agent.refresh_from_db()
         self.assertIsNotNone(self.agent.pin_code)
+
+
+import tempfile  # noqa: E402
+
+
+@override_settings(MEDIA_ROOT=tempfile.mkdtemp())
+class KycSubmitTest(APITestCase):
+    """Lot C3 : soumission et revue d'un dossier KYC (montée de palier)."""
+
+    def setUp(self):
+        from django.core.files.uploadedfile import SimpleUploadedFile  # noqa: F401
+        self.user = User.objects.create_user('kycuser', 'kyc@test.com', 'Passw0rd123')
+        self.agent = Agent.objects.create(
+            user=self.user, phone_number='70600060',
+            first_name='K', last_name='Y', kyc_status='PENDING', kyc_tier=0,
+        )
+        refresh = RefreshToken.for_user(self.user)
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {refresh.access_token}')
+
+    def _doc(self, name='id.jpg'):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+        return SimpleUploadedFile(name, b'fake-image-bytes', content_type='image/jpeg')
+
+    def test_submit_tier1_passe_en_submitted(self):
+        resp = self.client.post('/api/auth/kyc/submit/', {
+            'requested_tier': 1, 'id_card_front': self._doc(),
+        }, format='multipart')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.agent.refresh_from_db()
+        self.assertEqual(self.agent.kyc_status, 'SUBMITTED')
+        self.assertEqual(self.agent.kyc_requested_tier, 1)
+        self.assertTrue(self.agent.id_card_front_url)
+        self.assertIsNotNone(self.agent.kyc_submitted_at)
+
+    def test_submit_tier1_sans_piece_refuse(self):
+        resp = self.client.post('/api/auth/kyc/submit/', {
+            'requested_tier': 1,
+        }, format='multipart')
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('id_card_front', resp.data)
+
+    def test_submit_tier2_sans_selfie_refuse(self):
+        resp = self.client.post('/api/auth/kyc/submit/', {
+            'requested_tier': 2, 'id_card_front': self._doc(),
+        }, format='multipart')
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('selfie', resp.data)
+
+    def test_submit_palier_non_superieur_refuse(self):
+        self.agent.kyc_tier = 1
+        self.agent.save()
+        resp = self.client.post('/api/auth/kyc/submit/', {
+            'requested_tier': 1, 'id_card_front': self._doc(),
+        }, format='multipart')
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_review_approve_monte_le_palier(self):
+        self.client.post('/api/auth/kyc/submit/', {
+            'requested_tier': 1, 'id_card_front': self._doc(),
+        }, format='multipart')
+        # Admin
+        admin = User.objects.create_superuser('adm', 'adm@test.com', 'Passw0rd123')
+        refresh = RefreshToken.for_user(admin)
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {refresh.access_token}')
+        resp = self.client.post('/api/auth/kyc/review/', {
+            'agent_id': str(self.agent.id), 'decision': 'approve',
+        })
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.agent.refresh_from_db()
+        self.assertEqual(self.agent.kyc_tier, 1)
+        self.assertEqual(self.agent.kyc_status, 'APPROVED')
+
+    def test_review_reject_enregistre_motif(self):
+        admin = User.objects.create_superuser('adm2', 'adm2@test.com', 'Passw0rd123')
+        refresh = RefreshToken.for_user(admin)
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {refresh.access_token}')
+        resp = self.client.post('/api/auth/kyc/review/', {
+            'agent_id': str(self.agent.id), 'decision': 'reject',
+            'reason': 'Photo illisible',
+        })
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.agent.refresh_from_db()
+        self.assertEqual(self.agent.kyc_status, 'REJECTED')
+        self.assertEqual(self.agent.kyc_rejection_reason, 'Photo illisible')
+        self.assertEqual(self.agent.kyc_tier, 0)
+
+    def test_review_non_admin_refuse(self):
+        resp = self.client.post('/api/auth/kyc/review/', {
+            'agent_id': str(self.agent.id), 'decision': 'approve',
+        })
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)

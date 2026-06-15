@@ -4,37 +4,24 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sic_mobile/core/errors/failures.dart';
 import 'package:sic_mobile/features/auth/domain/entities/auth_user.dart';
 import 'package:sic_mobile/features/auth/domain/repositories/auth_repository.dart';
-import 'package:sic_mobile/features/auth/presentation/providers/app_lock_provider.dart';
 import 'package:sic_mobile/features/auth/presentation/providers/auth_provider.dart';
 
-const _user = AuthUser(
+const _submitted = AuthUser(
   id: '1',
   firstName: 'M',
   lastName: 'K',
   phoneNumber: '70123456',
   email: 'a@b.com',
-  kycStatus: 'APPROVED',
+  kycStatus: 'SUBMITTED',
   isSuspended: false,
+  kycTier: 0,
+  kycRequestedTier: 1,
   hasPin: true,
 );
 
 class _FakeAuthRepository implements AuthRepository {
-  _FakeAuthRepository({this.verifyFailure});
-
-  final Failure? verifyFailure;
-  String? lastPin;
-
-  @override
-  Future<Either<Failure, String>> verifyPin(String pin) async {
-    lastPin = pin;
-    return verifyFailure != null ? Left(verifyFailure!) : const Right('tok-123');
-  }
-
-  @override
-  Future<bool> hasSession() async => true;
-
-  @override
-  Future<Either<Failure, AuthUser>> getProfile() async => const Right(_user);
+  int? lastRequestedTier;
+  Failure? submitFailure;
 
   @override
   Future<Either<Failure, AuthUser>> submitKyc({
@@ -42,12 +29,17 @@ class _FakeAuthRepository implements AuthRepository {
     String? idCardFrontPath,
     String? idCardBackPath,
     String? selfiePath,
-  }) async =>
-      const Right(_user);
+  }) async {
+    lastRequestedTier = requestedTier;
+    return submitFailure != null ? Left(submitFailure!) : const Right(_submitted);
+  }
+
+  @override
+  Future<bool> hasSession() async => false;
 
   @override
   Future<Either<Failure, AuthUser>> login(String u, String p) async =>
-      const Right(_user);
+      const Left(AuthFailure());
 
   @override
   Future<Either<Failure, AuthUser>> verifyDevice({
@@ -55,10 +47,11 @@ class _FakeAuthRepository implements AuthRepository {
     required String password,
     required String otp,
   }) async =>
-      const Right(_user);
+      const Left(AuthFailure());
 
   @override
-  Future<Either<Failure, Unit>> logout() async => const Right(unit);
+  Future<Either<Failure, AuthUser>> getProfile() async =>
+      const Left(AuthFailure());
 
   @override
   Future<Either<Failure, Unit>> sendOtp(String email) async => const Right(unit);
@@ -95,54 +88,48 @@ class _FakeAuthRepository implements AuthRepository {
     required String pinConfirm,
   }) async =>
       const Right(unit);
+
+  @override
+  Future<Either<Failure, String>> verifyPin(String pin) async =>
+      const Right('tok');
+
+  @override
+  Future<Either<Failure, Unit>> logout() async => const Right(unit);
 }
 
 void main() {
-  test('verifyPin succes : retourne le token, pas d\'erreur', () async {
+  test('submitKyc succes : etat passe a SUBMITTED', () async {
     final repo = _FakeAuthRepository();
-    final container = ProviderContainer(
+    final c = ProviderContainer(
       overrides: [authRepositoryProvider.overrideWithValue(repo)],
     );
-    addTearDown(container.dispose);
-    await container.read(authControllerProvider.future);
+    addTearDown(c.dispose);
+    await c.read(authControllerProvider.future);
 
-    final result =
-        await container.read(authControllerProvider.notifier).verifyPin('1234');
+    final error = await c
+        .read(authControllerProvider.notifier)
+        .submitKyc(requestedTier: 1, idCardFrontPath: '/tmp/x.jpg');
 
-    expect(result.error, isNull);
-    expect(result.token, 'tok-123');
-    expect(repo.lastPin, '1234');
+    expect(error, isNull);
+    expect(repo.lastRequestedTier, 1);
+    final user = c.read(authControllerProvider).value;
+    expect(user?.kycSubmitted, isTrue);
+    expect(user?.kycRequestedTier, 1);
   });
 
-  test('verifyPin echec : retourne le message, pas de token', () async {
-    final repo = _FakeAuthRepository(
-      verifyFailure: const ValidationFailure('Code PIN incorrect.'),
-    );
-    final container = ProviderContainer(
+  test('submitKyc echec : message d\'erreur', () async {
+    final repo = _FakeAuthRepository()
+      ..submitFailure = const ValidationFailure("Piece d'identite requise.");
+    final c = ProviderContainer(
       overrides: [authRepositoryProvider.overrideWithValue(repo)],
     );
-    addTearDown(container.dispose);
-    await container.read(authControllerProvider.future);
+    addTearDown(c.dispose);
+    await c.read(authControllerProvider.future);
 
-    final result =
-        await container.read(authControllerProvider.notifier).verifyPin('0000');
+    final error = await c
+        .read(authControllerProvider.notifier)
+        .submitKyc(requestedTier: 1);
 
-    expect(result.error, 'Code PIN incorrect.');
-    expect(result.token, isNull);
-  });
-
-  test('logout reverrouille l\'app', () async {
-    final repo = _FakeAuthRepository();
-    final container = ProviderContainer(
-      overrides: [authRepositoryProvider.overrideWithValue(repo)],
-    );
-    addTearDown(container.dispose);
-    await container.read(authControllerProvider.future);
-
-    container.read(appLockProvider.notifier).unlock();
-    expect(container.read(appLockProvider), isTrue);
-
-    await container.read(authControllerProvider.notifier).logout();
-    expect(container.read(appLockProvider), isFalse);
+    expect(error, "Piece d'identite requise.");
   });
 }

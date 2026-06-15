@@ -21,6 +21,13 @@ class AccountScreen extends ConsumerWidget {
     final name = summary?.agentName ?? 'Agent SIC';
     final code = summary?.agentCode ?? '—';
     final initials = summary?.agentInitials ?? 'SIC';
+    final user = ref.watch(authControllerProvider).valueOrNull;
+    final tier = user?.kycTier ?? 0;
+    final kycSubtitle = user != null && user.kycSubmitted
+        ? 'Dossier en cours de verification'
+        : tier >= 2
+            ? 'Palier 2 — Complet'
+            : 'Palier $tier — augmenter vos plafonds';
 
     return SafeArea(
       bottom: false,
@@ -32,6 +39,13 @@ class AccountScreen extends ConsumerWidget {
           const SizedBox(height: AppSpacing.md),
           _ProfileHeader(name: name, code: code, initials: initials),
           const SizedBox(height: AppSpacing.lg),
+          _Tile(
+            icon: Icons.badge_outlined,
+            title: 'Verification d\'identite',
+            subtitle: kycSubtitle,
+            onTap: () => context.go('/kyc'),
+          ),
+          const SizedBox(height: AppSpacing.sm),
           _Tile(
             icon: Icons.settings_outlined,
             title: 'Parametres',

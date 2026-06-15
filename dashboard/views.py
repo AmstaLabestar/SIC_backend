@@ -307,6 +307,11 @@ def agent_kyc_action(request, agent_id, action):
     agent = get_object_or_404(Agent, id=agent_id)
     if action == 'approve':
         agent.kyc_status = 'APPROVED'
+        # Monter le palier KYC (pilote les plafonds) : palier demandé sinon
+        # complet (2) par défaut, cohérent avec l'API /auth/kyc/review/ (lot C3).
+        agent.kyc_tier = agent.kyc_requested_tier or max(agent.kyc_tier, 2)
+        agent.kyc_requested_tier = None
+        agent.kyc_rejection_reason = ''
         messages.success(request, f"L'agent {agent.first_name} a été approuvé.")
         log_activity(user=request.user, agent=agent, action="KYC_APPROVED", description=f"Le compte KYC de l'agent {agent.phone_number} a été approuvé.", level="SUCCESS")
     elif action == 'reject':

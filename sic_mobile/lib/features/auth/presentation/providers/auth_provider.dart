@@ -108,6 +108,27 @@ class AuthController extends AsyncNotifier<AuthUser?> {
     state = AsyncValue.data(user);
   }
 
+  /// Soumet un dossier KYC (lot C3). Met a jour l'etat avec le profil renvoye
+  /// (statut SUBMITTED). Retourne un message d'erreur, ou `null` si succes.
+  Future<String?> submitKyc({
+    required int requestedTier,
+    String? idCardFrontPath,
+    String? idCardBackPath,
+    String? selfiePath,
+  }) async {
+    final repo = ref.read(authRepositoryProvider);
+    final result = await repo.submitKyc(
+      requestedTier: requestedTier,
+      idCardFrontPath: idCardFrontPath,
+      idCardBackPath: idCardBackPath,
+      selfiePath: selfiePath,
+    );
+    return result.fold((failure) => failure.message, (user) {
+      state = AsyncValue.data(user);
+      return null;
+    });
+  }
+
   /// Reinitialise les providers de donnees liees a l'utilisateur courant.
   void _invalidateUserData() {
     ref.invalidate(dashboardNotifierProvider);

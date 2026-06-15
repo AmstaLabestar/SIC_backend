@@ -164,6 +164,99 @@ class AccountLimitsView(generics.GenericAPIView):
         return Response(payload, status=status.HTTP_200_OK)
 
 
+class KycSubmitView(generics.GenericAPIView):
+    """
+    Soumission d'un dossier KYC pour monter de palier (lot C3).
+
+    POST /api/auth/kyc/submit/   (multipart)
+    { requested_tier, id_card_front, id_card_back?, selfie? }
+
+    Stocke les documents, passe le compte en statut SUBMITTED (en revue). La
+    décision (montée de palier) est prise par un administrateur via /kyc/review/
+    ou le dashboard.
+    """
+    permission_classes = [IsAuthenticated]
+    serializer_class = AgentSerializer
+
+    def post(self, request):
+        from .serializers import KycSubmitSerializer
+        agent = getattr(request.user, 'agent_profile', None)
+        if not agent:
+            return Response({'error': 'Profil introuvable.'}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = KycSubmitSerializer(data=request.data, context={'agent': agent})
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        data = serializer.validated_data
+        if data.get('id_card_front'):
+            agent.id_card_front_url = data['id_card_front']
+        if data.get('id_card_back'):
+            agent.id_card_back_url = data['id_card_back']
+        if data.get('selfie'):
+            agent.selfie_url = data['selfie']
+        agent.kyc_requested_tier = data['requested_tier']
+        agent.kyc_status = 'SUBMITTED'
+        agent.kyc_submitted_at = timezone.now()
+        agent.kyc_rejection_reason = ''
+        agent.save()
+
+        log_activity(
+            user=request.user, agent=agent,
+            action="KYC_SUBMITTED",
+            description=f"Dossier KYC soumis (palier {data['requested_tier']}) "
+                        f"par {request.user.username}.",
+            level="INFO",
+            ip_address=request.META.get('REMOTE_ADDR'),
+        )
+        return Response(AgentSerializer(agent).data, status=status.HTTP_200_OK)
+
+
+class KycReviewView(generics.GenericAPIView):
+    """
+    Revue d'un dossier KYC par un administrateur (lot C3).
+
+    POST /api/auth/kyc/review/
+    { agent_id, decision: "approve"|"reject", reason? }
+
+    approve → applique le palier demandé (kyc_tier) et statut APPROVED.
+    reject  → statut REJECTED + motif.
+    """
+    permission_classes = [IsAdminUser]
+
+    def post(self, request):
+        agent_id = request.data.get('agent_id')
+        decision = (request.data.get('decision') or '').strip().lower()
+        reason = (request.data.get('reason') or '').strip()
+
+        agent = Agent.objects.filter(id=agent_id).first()
+        if not agent:
+            return Response({'error': 'Agent introuvable.'}, status=status.HTTP_404_NOT_FOUND)
+        if decision not in ('approve', 'reject'):
+            return Response({'error': "décision invalide (approve|reject)."},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        if decision == 'approve':
+            agent.kyc_tier = agent.kyc_requested_tier or max(agent.kyc_tier, 1)
+            agent.kyc_status = 'APPROVED'
+            agent.kyc_requested_tier = None
+            agent.kyc_rejection_reason = ''
+            action, level = 'KYC_APPROVED', 'SUCCESS'
+        else:
+            agent.kyc_status = 'REJECTED'
+            agent.kyc_rejection_reason = reason or 'Dossier non conforme.'
+            action, level = 'KYC_REJECTED', 'WARNING'
+        agent.save()
+
+        log_activity(
+            user=request.user, agent=agent, action=action,
+            description=f"KYC {decision} pour {agent.phone_number} (palier {agent.kyc_tier}).",
+            level=level,
+            ip_address=request.META.get('REMOTE_ADDR'),
+        )
+        return Response(AgentSerializer(agent).data, status=status.HTTP_200_OK)
+
+
 class PuceViewSet(viewsets.ModelViewSet):
     """
     VueSet pour gérer les puces SIM de l'agent.

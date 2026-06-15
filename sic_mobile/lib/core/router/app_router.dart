@@ -8,6 +8,7 @@ import '../../features/auth/presentation/providers/app_lock_provider.dart';
 import '../../features/auth/presentation/providers/auth_provider.dart';
 import '../../features/auth/presentation/screens/device_verify_screen.dart';
 import '../../features/auth/presentation/screens/forgot_password_screen.dart';
+import '../../features/auth/presentation/screens/kyc_screen.dart';
 import '../../features/auth/presentation/screens/lock_screen.dart';
 import '../../features/auth/presentation/screens/login_screen.dart';
 import '../../features/auth/presentation/screens/pin_setup_screen.dart';
@@ -109,6 +110,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/lock',
         builder: (context, state) => const LockScreen(),
+      ),
+      GoRoute(
+        path: '/kyc',
+        builder: (context, state) => const KycScreen(),
       ),
       GoRoute(
         path: '/operations/depot',

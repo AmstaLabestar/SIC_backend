@@ -67,6 +67,15 @@ class _FakeAuthRepository implements AuthRepository {
   Future<Either<Failure, AuthUser>> getProfile() async => const Right(_user);
 
   @override
+  Future<Either<Failure, AuthUser>> submitKyc({
+    required int requestedTier,
+    String? idCardFrontPath,
+    String? idCardBackPath,
+    String? selfiePath,
+  }) async =>
+      const Right(_user);
+
+  @override
   Future<Either<Failure, Unit>> sendOtp(String email) async => const Right(unit);
 
   @override

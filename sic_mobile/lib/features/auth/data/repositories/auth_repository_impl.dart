@@ -185,6 +185,39 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   @override
+  Future<Either<Failure, AuthUser>> submitKyc({
+    required int requestedTier,
+    String? idCardFrontPath,
+    String? idCardBackPath,
+    String? selfiePath,
+  }) async {
+    try {
+      final profile = await _datasource.submitKyc(
+        requestedTier: requestedTier,
+        idCardFrontPath: idCardFrontPath,
+        idCardBackPath: idCardBackPath,
+        selfiePath: selfiePath,
+      );
+      // `/kyc/submit/` ne renvoie pas `has_pin` : on le lit dans le JWT courant.
+      final access = await _storage.readAccess();
+      return Right(profile.copyWith(hasPin: jwtHasPin(access)));
+    } catch (error) {
+      // 400 = validation (palier/documents) : restituer le message lisible.
+      if (error is DioException && error.response?.statusCode == 400) {
+        final data = error.response?.data;
+        if (data is Map) {
+          for (final v in data.values) {
+            if (v is List && v.isNotEmpty) return Left(ValidationFailure(v.first.toString()));
+            if (v is String) return Left(ValidationFailure(v));
+          }
+        }
+        return const Left(ValidationFailure('Dossier KYC invalide.'));
+      }
+      return Left(mapDioErrorToFailure(error));
+    }
+  }
+
+  @override
   Future<Either<Failure, AuthUser>> getProfile() async {
     try {
       final profile = await _datasource.getProfile();

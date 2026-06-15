@@ -350,6 +350,43 @@ class RegisterSerializer(serializers.ModelSerializer):
         return user
 
 
+class KycSubmitSerializer(serializers.Serializer):
+    """
+    Soumission d'un dossier KYC pour monter de palier (lot C3).
+
+    - `requested_tier` : palier visé (1 = pièce vérifiée, 2 = complet).
+    - documents en multipart : `id_card_front`, `id_card_back`, `selfie`.
+    Les documents déjà fournis lors d'une soumission précédente sont réutilisés
+    s'ils ne sont pas renvoyés.
+    """
+    requested_tier = serializers.IntegerField(min_value=1, max_value=2)
+    id_card_front = serializers.FileField(required=False)
+    id_card_back = serializers.FileField(required=False)
+    selfie = serializers.FileField(required=False)
+
+    def validate(self, attrs):
+        agent = self.context.get('agent')
+        tier = attrs['requested_tier']
+
+        current = getattr(agent, 'kyc_tier', 0) or 0
+        if tier <= current:
+            raise serializers.ValidationError(
+                f"Vous êtes déjà au palier {current}. Demandez un palier supérieur."
+            )
+
+        has_front = attrs.get('id_card_front') or (agent and agent.id_card_front_url)
+        has_selfie = attrs.get('selfie') or (agent and agent.selfie_url)
+        if tier >= 1 and not has_front:
+            raise serializers.ValidationError(
+                {'id_card_front': "Pièce d'identité (recto) requise."}
+            )
+        if tier >= 2 and not has_selfie:
+            raise serializers.ValidationError(
+                {'selfie': "Un selfie est requis pour le palier complet."}
+            )
+        return attrs
+
+
 class DepositSerializer(serializers.Serializer):
     """
     Serializer pour les dépôts.
@@ -660,6 +697,7 @@ class AgentSerializer(serializers.ModelSerializer):
             'id', 'username', 'email', 'account_type',
             'phone_number', 'first_name', 'last_name',
             'kyc_status', 'kyc_tier',
+            'kyc_requested_tier', 'kyc_submitted_at', 'kyc_rejection_reason',
             'is_suspended', 'puces',
             'created_at', 'updated_at'
         ]

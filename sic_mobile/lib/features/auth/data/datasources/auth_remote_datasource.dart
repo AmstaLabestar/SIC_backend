@@ -71,6 +71,32 @@ class AuthRemoteDatasource {
     );
   }
 
+  /// Soumet un dossier KYC (`POST /auth/kyc/submit/`, multipart) pour monter
+  /// de palier (lot C3). Retourne le profil mis a jour (statut SUBMITTED).
+  Future<AuthUserModel> submitKyc({
+    required int requestedTier,
+    String? idCardFrontPath,
+    String? idCardBackPath,
+    String? selfiePath,
+  }) async {
+    final form = FormData.fromMap({
+      'requested_tier': requestedTier,
+      if (idCardFrontPath != null)
+        'id_card_front':
+            await MultipartFile.fromFile(idCardFrontPath, filename: 'id_front.jpg'),
+      if (idCardBackPath != null)
+        'id_card_back':
+            await MultipartFile.fromFile(idCardBackPath, filename: 'id_back.jpg'),
+      if (selfiePath != null)
+        'selfie': await MultipartFile.fromFile(selfiePath, filename: 'selfie.jpg'),
+    });
+    final response = await _dio.post<Map<String, dynamic>>(
+      ApiConstants.kycSubmit,
+      data: form,
+    );
+    return AuthUserModel.fromJson(response.data!);
+  }
+
   Future<AuthUserModel> getProfile() async {
     final response = await _dio.get<Map<String, dynamic>>(
       ApiConstants.profile,

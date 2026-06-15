@@ -12,6 +12,8 @@ class AuthUser extends Equatable {
     required this.isSuspended,
     this.accountType = 'AGENT',
     this.kycTier = 0,
+    this.kycRequestedTier,
+    this.kycRejectionReason = '',
     this.hasPin = false,
   });
 
@@ -31,6 +33,12 @@ class AuthUser extends Equatable {
   /// (cf moteur de limites backend, endpoint `/auth/limits/`).
   final int kycTier;
 
+  /// Palier demande lors d'une soumission KYC en attente (null si aucune).
+  final int? kycRequestedTier;
+
+  /// Motif de rejet de la derniere soumission KYC (vide si aucun).
+  final String kycRejectionReason;
+
   /// Vrai si l'agent a deja configure un code PIN (claim du JWT d'acces).
   final bool hasPin;
 
@@ -43,6 +51,8 @@ class AuthUser extends Equatable {
   }
 
   bool get isApproved => kycStatus.toUpperCase() == 'APPROVED';
+  bool get kycSubmitted => kycStatus.toUpperCase() == 'SUBMITTED';
+  bool get kycRejected => kycStatus.toUpperCase() == 'REJECTED';
 
   AuthUser copyWith({bool? hasPin}) {
     return AuthUser(
@@ -55,6 +65,8 @@ class AuthUser extends Equatable {
       isSuspended: isSuspended,
       accountType: accountType,
       kycTier: kycTier,
+      kycRequestedTier: kycRequestedTier,
+      kycRejectionReason: kycRejectionReason,
       hasPin: hasPin ?? this.hasPin,
     );
   }
@@ -70,6 +82,8 @@ class AuthUser extends Equatable {
         isSuspended,
         accountType,
         kycTier,
+        kycRequestedTier,
+        kycRejectionReason,
         hasPin,
       ];
 }

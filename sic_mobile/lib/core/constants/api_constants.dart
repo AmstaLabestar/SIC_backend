@@ -29,6 +29,7 @@ class ApiConstants {
   static const passwordResetConfirm = '/auth/password/reset/confirm/';
   static const profile = '/auth/profile/';
   static const limits = '/auth/limits/';
+  static const kycSubmit = '/auth/kyc/submit/';
   static const pinSetup = '/auth/pin/setup/';
   static const pinVerify = '/auth/pin/verify/';
 

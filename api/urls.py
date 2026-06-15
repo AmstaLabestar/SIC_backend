@@ -12,6 +12,7 @@ from .views import (
     RegisterView, OtpSendView, CommissionInfoView, HealthCheckView,
     CustomTokenObtainPairView, DeviceVerifyView, LogoutView,
     PasswordResetRequestView, PasswordResetConfirmView,
+    KycSubmitView, KycReviewView,
     PinSetupView, PinVerifyView,
     BiometricRegisterView, BiometricLoginView, BiometricDeviceListView
 )
@@ -33,6 +34,8 @@ urlpatterns = [
     path('auth/password/reset/confirm/', PasswordResetConfirmView.as_view(), name='password_reset_confirm'),
     path('auth/profile/', AgentProfileView.as_view(), name='agent_profile'),
     path('auth/limits/', AccountLimitsView.as_view(), name='account_limits'),
+    path('auth/kyc/submit/', KycSubmitView.as_view(), name='kyc_submit'),
+    path('auth/kyc/review/', KycReviewView.as_view(), name='kyc_review'),
 
     # Code PIN
     path('auth/pin/setup/', PinSetupView.as_view(), name='pin_setup'),

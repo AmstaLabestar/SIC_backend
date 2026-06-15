@@ -47,6 +47,15 @@ abstract class AuthRepository {
   /// Recupere le profil de l'agent connecte.
   Future<Either<Failure, AuthUser>> getProfile();
 
+  /// Soumet un dossier KYC (documents + palier demande) pour monter de palier
+  /// (lot C3). Retourne le profil mis a jour.
+  Future<Either<Failure, AuthUser>> submitKyc({
+    required int requestedTier,
+    String? idCardFrontPath,
+    String? idCardBackPath,
+    String? selfiePath,
+  });
+
   /// Definit le code PIN (exige le mot de passe du compte).
   Future<Either<Failure, Unit>> setupPin({
     required String password,

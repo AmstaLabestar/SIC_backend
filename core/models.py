@@ -24,15 +24,22 @@ class Agent(models.Model):
     first_name = models.CharField(max_length=100, null=True, blank=True)
     last_name = models.CharField(max_length=100, null=True, blank=True)
 
-    # KYC Info
-    id_card_front_url = models.URLField(null=True, blank=True)
-    id_card_back_url = models.URLField(null=True, blank=True)
-    selfie_url = models.URLField(null=True, blank=True)
-    kyc_status = models.CharField(max_length=20, default='PENDING') # PENDING, APPROVED, REJECTED
+    # KYC Info — documents uploadés (lot C3). Conservent le suffixe `_url` par
+    # compat historique mais sont désormais des FileField (le `.url` donne le
+    # chemin sous MEDIA_URL). FileField (pas ImageField) : pas de dépendance Pillow.
+    id_card_front_url = models.FileField(upload_to='kyc/', null=True, blank=True)
+    id_card_back_url = models.FileField(upload_to='kyc/', null=True, blank=True)
+    selfie_url = models.FileField(upload_to='kyc/', null=True, blank=True)
+    # PENDING (starter, rien soumis) · SUBMITTED (dossier en revue) · APPROVED · REJECTED
+    kyc_status = models.CharField(max_length=20, default='PENDING')
     # Palier de confiance KYC pilotant les plafonds (cf api/services/limits.py) :
     # 0 = Starter (sans pièce), 1 = pièce vérifiée, 2 = complet (pièce+selfie).
     # Défaut 0 ; les comptes APPROVED existants sont passés à 2 par migration.
     kyc_tier = models.PositiveSmallIntegerField(default=0)
+    # Suivi de soumission KYC (lot C3) : palier demandé, date, motif de rejet.
+    kyc_requested_tier = models.PositiveSmallIntegerField(null=True, blank=True)
+    kyc_submitted_at = models.DateTimeField(null=True, blank=True)
+    kyc_rejection_reason = models.CharField(max_length=255, blank=True, default='')
 
     # Code secret (PIN hashé)
     pin_code = models.CharField(max_length=128, null=True, blank=True)
