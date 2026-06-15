@@ -14,6 +14,7 @@ import '../../features/auth/presentation/screens/login_screen.dart';
 import '../../features/auth/presentation/screens/pin_setup_screen.dart';
 import '../../features/auth/presentation/screens/register_screen.dart';
 import '../../features/auth/presentation/screens/splash_screen.dart';
+import '../../features/client/presentation/screens/client_home_screen.dart';
 import '../../features/dashboard/presentation/screens/dashboard_screen.dart';
 import '../../features/settings/presentation/screens/settings_screen.dart';
 import '../../features/sim_management/presentation/screens/sim_management_screen.dart';
@@ -139,7 +140,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         routes: [
           GoRoute(
             path: '/dashboard',
-            builder: (context, state) => const DashboardScreen(),
+            builder: (context, state) {
+              // Accueil pilote par le role (lot D1-2) : un CLIENT voit un
+              // accueil overlay simplifie, un AGENT le dashboard float/puces.
+              final user = ref.read(authControllerProvider).valueOrNull;
+              return (user?.isClient ?? false)
+                  ? const ClientHomeScreen()
+                  : const DashboardScreen();
+            },
           ),
           GoRoute(
             path: '/transactions',

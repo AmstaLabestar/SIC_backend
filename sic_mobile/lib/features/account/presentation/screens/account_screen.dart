@@ -17,11 +17,16 @@ class AccountScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final summary = ref.watch(dashboardNotifierProvider).valueOrNull;
-    final name = summary?.agentName ?? 'Agent SIC';
-    final code = summary?.agentCode ?? '—';
-    final initials = summary?.agentInitials ?? 'SIC';
     final user = ref.watch(authControllerProvider).valueOrNull;
+    final isClient = user?.isClient ?? false;
+    // Un CLIENT n'a pas de profil agent (puces/float) : on s'appuie sur AuthUser
+    // et on masque le code agent + le badge "Verifie" agent (lot D1-2).
+    final summary = isClient
+        ? null
+        : ref.watch(dashboardNotifierProvider).valueOrNull;
+    final name = user?.fullName ?? summary?.agentName ?? 'Compte SIC';
+    final code = isClient ? '' : (summary?.agentCode ?? '—');
+    final initials = summary?.agentInitials ?? _initialsFrom(name);
     final tier = user?.kycTier ?? 0;
     final kycSubtitle = user != null && user.kycSubmitted
         ? 'Dossier en cours de verification'
@@ -37,7 +42,12 @@ class AccountScreen extends ConsumerWidget {
         children: [
           Text('Mon compte', style: AppTextStyles.titleLarge),
           const SizedBox(height: AppSpacing.md),
-          _ProfileHeader(name: name, code: code, initials: initials),
+          _ProfileHeader(
+            name: name,
+            code: code,
+            initials: initials,
+            showVerified: !isClient,
+          ),
           const SizedBox(height: AppSpacing.lg),
           _Tile(
             icon: Icons.badge_outlined,
@@ -109,6 +119,13 @@ class AccountScreen extends ConsumerWidget {
     }
   }
 
+  String _initialsFrom(String name) {
+    final parts = name.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty);
+    if (parts.isEmpty) return 'SIC';
+    final letters = parts.take(2).map((p) => p[0].toUpperCase()).join();
+    return letters.isEmpty ? 'SIC' : letters;
+  }
+
   void _comingSoon(BuildContext context, String label) {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
@@ -126,11 +143,13 @@ class _ProfileHeader extends StatelessWidget {
     required this.name,
     required this.code,
     required this.initials,
+    this.showVerified = true,
   });
 
   final String name;
   final String code;
   final String initials;
+  final bool showVerified;
 
   @override
   Widget build(BuildContext context) {
@@ -181,41 +200,60 @@ class _ProfileHeader extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Text(code, style: AppTextStyles.caption),
-                    const SizedBox(width: AppSpacing.sm),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppColors.success.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
+                showVerified
+                    ? Row(
                         children: [
-                          const Icon(
-                            Icons.verified_rounded,
-                            size: 12,
-                            color: AppColors.success,
-                          ),
-                          const SizedBox(width: 3),
-                          Text(
-                            'Verifie',
-                            style: AppTextStyles.caption.copyWith(
-                              color: AppColors.success,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 11,
+                          Text(code, style: AppTextStyles.caption),
+                          const SizedBox(width: AppSpacing.sm),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.success.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(
+                                  Icons.verified_rounded,
+                                  size: 12,
+                                  color: AppColors.success,
+                                ),
+                                const SizedBox(width: 3),
+                                Text(
+                                  'Verifie',
+                                  style: AppTextStyles.caption.copyWith(
+                                    color: AppColors.success,
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 11,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ],
+                      )
+                    : Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withValues(alpha: 0.10),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          'Client',
+                          style: AppTextStyles.caption.copyWith(
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 11,
+                          ),
+                        ),
                       ),
-                    ),
-                  ],
-                ),
               ],
             ),
           ),
