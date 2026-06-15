@@ -24,6 +24,11 @@ class Agent(models.Model):
     first_name = models.CharField(max_length=100, null=True, blank=True)
     last_name = models.CharField(max_length=100, null=True, blank=True)
 
+    # Code marchand (numero de caisse) attribue par l'operateur a l'agent PDV,
+    # ex. Orange *144*3*<merchant_code>*montant#. Declare a l'inscription (lot D1),
+    # valide par l'admin via le flux KYC. Vide pour un CLIENT (pas de caisse).
+    merchant_code = models.CharField(max_length=50, blank=True, default='')
+
     # KYC Info — documents uploadés (lot C3). Conservent le suffixe `_url` par
     # compat historique mais sont désormais des FileField (le `.url` donne le
     # chemin sous MEDIA_URL). FileField (pas ImageField) : pas de dépendance Pillow.

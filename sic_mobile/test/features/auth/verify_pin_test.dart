@@ -85,6 +85,8 @@ class _FakeAuthRepository implements AuthRepository {
     required String firstName,
     required String lastName,
     required String otp,
+    required String accountType,
+    String merchantCode = '',
   }) async =>
       const Right(unit);
 

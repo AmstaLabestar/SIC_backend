@@ -178,6 +178,8 @@ class AuthController extends AsyncNotifier<AuthUser?> {
     required String firstName,
     required String lastName,
     required String otp,
+    required String accountType,
+    String merchantCode = '',
   }) async {
     final repo = ref.read(authRepositoryProvider);
     final result = await repo.register(
@@ -189,6 +191,8 @@ class AuthController extends AsyncNotifier<AuthUser?> {
       firstName: firstName,
       lastName: lastName,
       otp: otp,
+      accountType: accountType,
+      merchantCode: merchantCode,
     );
     return result.fold((failure) => failure.message, (_) => null);
   }

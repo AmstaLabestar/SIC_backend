@@ -214,6 +214,10 @@ class RegisterSerializer(serializers.ModelSerializer):
         required=False,
         default=Agent.ACCOUNT_AGENT,
     )
+    # Code marchand de l'agent (lot D1) : requis si account_type=AGENT, ignore
+    # pour un CLIENT. Valide ensuite par l'admin via le flux KYC.
+    merchant_code = serializers.CharField(
+        required=False, allow_blank=True, default='', max_length=50)
     # Code OTP reçu par email, à vérifier avant la création du compte (lot A2).
     otp = serializers.CharField(write_only=True, required=True, max_length=6)
     # Appareil d'inscription (lot A4) : approuvé d'office comme appareil de
@@ -227,7 +231,7 @@ class RegisterSerializer(serializers.ModelSerializer):
         model = User
         fields = ['username', 'email', 'password', 'password_confirm',
                   'phone_number', 'first_name', 'last_name', 'account_type',
-                  'otp', 'device_id', 'device_name']
+                  'merchant_code', 'otp', 'device_id', 'device_name']
 
     def validate_username(self, value):
         value = value.lower().strip()
@@ -283,6 +287,17 @@ class RegisterSerializer(serializers.ModelSerializer):
 
         return national
 
+    def validate(self, attrs):
+        """Le code marchand est obligatoire pour un AGENT (lot D1)."""
+        account_type = attrs.get('account_type', Agent.ACCOUNT_AGENT)
+        merchant_code = (attrs.get('merchant_code') or '').strip()
+        if account_type == Agent.ACCOUNT_AGENT and not merchant_code:
+            raise serializers.ValidationError({
+                'merchant_code': "Le code marchand est obligatoire pour un agent."
+            })
+        attrs['merchant_code'] = merchant_code
+        return attrs
+
     def create(self, validated_data):
         """Créer l'utilisateur et le profil agent."""
         # Extraire les données du téléphone
@@ -290,6 +305,10 @@ class RegisterSerializer(serializers.ModelSerializer):
         first_name = validated_data.pop('first_name', '')
         last_name = validated_data.pop('last_name', '')
         account_type = validated_data.pop('account_type', Agent.ACCOUNT_AGENT)
+        merchant_code = (validated_data.pop('merchant_code', '') or '').strip()
+        # Un CLIENT n'a pas de caisse marchand : on ignore tout code fourni.
+        if account_type != Agent.ACCOUNT_AGENT:
+            merchant_code = ''
         otp_code = validated_data.pop('otp', '')
         device_id = (validated_data.pop('device_id', '') or '').strip()
         device_name = (validated_data.pop('device_name', '') or '').strip()
@@ -317,6 +336,7 @@ class RegisterSerializer(serializers.ModelSerializer):
             phone_number=phone_number,
             first_name=first_name,
             last_name=last_name,
+            merchant_code=merchant_code,
             kyc_status='PENDING'  # Par défaut en attente de validation KYC
         )
 
@@ -695,7 +715,7 @@ class AgentSerializer(serializers.ModelSerializer):
         model = Agent
         fields = [
             'id', 'username', 'email', 'account_type',
-            'phone_number', 'first_name', 'last_name',
+            'phone_number', 'first_name', 'last_name', 'merchant_code',
             'kyc_status', 'kyc_tier',
             'kyc_requested_tier', 'kyc_submitted_at', 'kyc_rejection_reason',
             'is_suspended', 'puces',

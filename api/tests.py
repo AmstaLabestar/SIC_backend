@@ -469,6 +469,7 @@ class RegisterSerializerTest(TestCase):
             'phone_number': phone,
             'first_name': 'Test',
             'last_name': 'Agent',
+            'merchant_code': '8170275',  # requis pour un AGENT (lot D1)
             'otp': code,
         }
 
@@ -513,6 +514,35 @@ class RegisterSerializerTest(TestCase):
         agent = s.save().agent_profile
         self.assertEqual(agent.account_type, Agent.ACCOUNT_CLIENT)
         self.assertEqual(agent.puces.count(), 0)
+
+    # --- D1 : code marchand -----------------------------------------------
+
+    def test_register_agent_exige_code_marchand(self):
+        """Un AGENT sans code marchand est refuse (lot D1)."""
+        from api.serializers import RegisterSerializer
+        data = self._data('agentnocode', '70222888')
+        data.pop('merchant_code')
+        s = RegisterSerializer(data=data)
+        self.assertFalse(s.is_valid())
+        self.assertIn('merchant_code', s.errors)
+
+    def test_register_agent_stocke_code_marchand(self):
+        """Le code marchand declare par l'agent est conserve."""
+        from api.serializers import RegisterSerializer
+        s = RegisterSerializer(data=self._data('agentcode', '70222999'))
+        self.assertTrue(s.is_valid(), s.errors)
+        agent = s.save().agent_profile
+        self.assertEqual(agent.merchant_code, '8170275')
+
+    def test_register_client_ignore_code_marchand(self):
+        """Un CLIENT n'a pas de caisse : le code marchand est ignore (vide)."""
+        from api.serializers import RegisterSerializer
+        data = {**self._data('clientcode', '70223000'),
+                'account_type': 'CLIENT', 'merchant_code': '9999999'}
+        s = RegisterSerializer(data=data)
+        self.assertTrue(s.is_valid(), s.errors)
+        agent = s.save().agent_profile
+        self.assertEqual(agent.merchant_code, '')
 
     def test_token_expose_account_type(self):
         """Le JWT porte account_type (pour le routage de rôle côté app)."""
@@ -608,7 +638,7 @@ class EmailOtpTest(TestCase):
             'username': 'badotp', 'email': 'badotp@test.com',
             'password': 'Passw0rd123', 'password_confirm': 'Passw0rd123',
             'phone_number': '70333222', 'first_name': 'B', 'last_name': 'O',
-            'otp': '123456',
+            'merchant_code': '8170275', 'otp': '123456',
         }
         s = RegisterSerializer(data=data)
         # Champ valide en forme, mais vérification échoue à la création.

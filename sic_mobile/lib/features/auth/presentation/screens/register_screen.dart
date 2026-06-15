@@ -31,8 +31,11 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   final _firstName = TextEditingController();
   final _lastName = TextEditingController();
   final _phone = TextEditingController();
+  final _merchantCode = TextEditingController();
   final _password = TextEditingController();
   final _passwordConfirm = TextEditingController();
+  // Type de compte choisi a l'inscription (lot D1). Defaut AGENT.
+  bool _isAgent = true;
   bool _obscure = true;
   bool _submitting = false;
   String? _error;
@@ -52,6 +55,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     _firstName.dispose();
     _lastName.dispose();
     _phone.dispose();
+    _merchantCode.dispose();
     _password.dispose();
     _passwordConfirm.dispose();
     super.dispose();
@@ -154,6 +158,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           firstName: _firstName.text.trim(),
           lastName: _lastName.text.trim(),
           otp: _otp,
+          accountType: _isAgent ? 'AGENT' : 'CLIENT',
+          merchantCode: _isAgent ? _merchantCode.text.trim() : '',
         );
 
     if (!mounted) return;
@@ -272,10 +278,21 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
               Text('Rejoignez SIC', style: AppTextStyles.displayLarge),
               const SizedBox(height: 4),
               Text(
-                'Renseignez vos informations d\'agent.',
+                _isAgent
+                    ? 'Compte agent : gerez vos SIM, le float et la compensation.'
+                    : 'Compte client : envoyez et recevez de l\'argent simplement.',
                 style: AppTextStyles.bodyMedium,
               ),
-              const SizedBox(height: AppSpacing.xl),
+              const SizedBox(height: AppSpacing.lg),
+
+              _label('Type de compte'),
+              _RoleSelector(
+                isAgent: _isAgent,
+                onChanged: _submitting
+                    ? null
+                    : (v) => setState(() => _isAgent = v),
+              ),
+              const SizedBox(height: AppSpacing.md),
 
               _label('Identifiant'),
               TextFormField(
@@ -339,13 +356,37 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   FilteringTextInputFormatter.digitsOnly,
                   LengthLimitingTextInputFormatter(10),
                 ],
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   hintText: '70123456',
-                  helperText: 'Ce numero deviendra votre premiere SIM.',
+                  helperText: _isAgent
+                      ? 'Ce numero deviendra votre premiere SIM.'
+                      : 'Numero utilise pour vos transferts.',
                 ),
                 validator: Validators.validateAnyPhone,
               ),
               const SizedBox(height: AppSpacing.md),
+
+              if (_isAgent) ...[
+                _label('Code marchand'),
+                TextFormField(
+                  controller: _merchantCode,
+                  keyboardType: TextInputType.text,
+                  textInputAction: TextInputAction.next,
+                  decoration: const InputDecoration(
+                    hintText: '8170275',
+                    helperText:
+                        'Votre numero de caisse operateur (valide ensuite par SIC).',
+                  ),
+                  validator: (v) {
+                    if (!_isAgent) return null;
+                    if ((v ?? '').trim().isEmpty) {
+                      return 'Code marchand requis pour un agent.';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: AppSpacing.md),
+              ],
 
               _label('Mot de passe'),
               TextFormField(
@@ -446,6 +487,81 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     final v = value ?? '';
     if (v.length < 8) return 'Au moins 8 caracteres.';
     return null;
+  }
+}
+
+/// Selecteur segmente Agent / Client (lot D1).
+class _RoleSelector extends StatelessWidget {
+  const _RoleSelector({required this.isAgent, required this.onChanged});
+
+  final bool isAgent;
+  final ValueChanged<bool>? onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        children: [
+          _option(
+            label: 'Agent',
+            icon: Icons.store_rounded,
+            selected: isAgent,
+            onTap: onChanged == null ? null : () => onChanged!(true),
+          ),
+          _option(
+            label: 'Client',
+            icon: Icons.person_rounded,
+            selected: !isAgent,
+            onTap: onChanged == null ? null : () => onChanged!(false),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _option({
+    required String label,
+    required IconData icon,
+    required bool selected,
+    required VoidCallback? onTap,
+  }) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            color: selected ? AppColors.primary : Colors.transparent,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon,
+                  size: 18,
+                  color: selected ? AppColors.onPrimary : AppColors.textSecondary),
+              const SizedBox(width: 8),
+              Text(
+                label,
+                style: AppTextStyles.bodyMedium.copyWith(
+                  color:
+                      selected ? AppColors.onPrimary : AppColors.textSecondary,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 

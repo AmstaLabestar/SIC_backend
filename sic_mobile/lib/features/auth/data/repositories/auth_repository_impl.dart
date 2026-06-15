@@ -166,6 +166,8 @@ class AuthRepositoryImpl implements AuthRepository {
     required String firstName,
     required String lastName,
     required String otp,
+    required String accountType,
+    String merchantCode = '',
   }) async {
     try {
       await _datasource.register(
@@ -177,6 +179,8 @@ class AuthRepositoryImpl implements AuthRepository {
         firstName: firstName,
         lastName: lastName,
         otp: otp,
+        accountType: accountType,
+        merchantCode: merchantCode,
       );
       return const Right(unit);
     } catch (error) {

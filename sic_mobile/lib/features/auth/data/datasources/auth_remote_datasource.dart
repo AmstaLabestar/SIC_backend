@@ -156,6 +156,8 @@ class AuthRemoteDatasource {
     required String firstName,
     required String lastName,
     required String otp,
+    required String accountType,
+    String merchantCode = '',
   }) async {
     await _dio.post<Map<String, dynamic>>(
       ApiConstants.register,
@@ -168,6 +170,8 @@ class AuthRemoteDatasource {
         'first_name': firstName,
         'last_name': lastName,
         'otp': otp,
+        'account_type': accountType,
+        'merchant_code': merchantCode,
       },
     );
   }

@@ -37,11 +37,15 @@ class _FakeAuthRepository implements AuthRepository {
     required String firstName,
     required String lastName,
     required String otp,
+    required String accountType,
+    String merchantCode = '',
   }) async {
     lastRegister = {
       'username': username,
       'phone': phoneNumber,
       'otp': otp,
+      'account_type': accountType,
+      'merchant_code': merchantCode,
     };
     return registerFailure != null ? Left(registerFailure!) : const Right(unit);
   }
@@ -109,10 +113,14 @@ void main() {
           firstName: 'M',
           lastName: 'K',
           otp: '123456',
+          accountType: 'AGENT',
+          merchantCode: '8170275',
         );
 
     expect(error, isNull);
     expect(repo.lastRegister?['username'], 'agent_test');
+    expect(repo.lastRegister?['account_type'], 'AGENT');
+    expect(repo.lastRegister?['merchant_code'], '8170275');
     expect(container.read(authControllerProvider).value, isNull);
   });
 
@@ -135,6 +143,8 @@ void main() {
           firstName: 'M',
           lastName: 'K',
           otp: '123456',
+          accountType: 'AGENT',
+          merchantCode: '8170275',
         );
 
     expect(error, 'Ce numero est deja utilise.');
