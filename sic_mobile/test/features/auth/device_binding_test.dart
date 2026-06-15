@@ -70,6 +70,18 @@ class _FakeAuthRepository implements AuthRepository {
   Future<Either<Failure, Unit>> sendOtp(String email) async => const Right(unit);
 
   @override
+  Future<Either<Failure, Unit>> requestPasswordReset(String identifier) async =>
+      const Right(unit);
+
+  @override
+  Future<Either<Failure, Unit>> confirmPasswordReset({
+    required String identifier,
+    required String otp,
+    required String newPassword,
+  }) async =>
+      const Right(unit);
+
+  @override
   Future<Either<Failure, Unit>> register({
     required String username,
     required String email,

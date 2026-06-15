@@ -122,6 +122,30 @@ class AuthController extends AsyncNotifier<AuthUser?> {
     return result.fold((failure) => failure.message, (_) => null);
   }
 
+  /// Reinitialisation (etape 1) : demande un code par email (lot A5).
+  /// Retourne un message d'erreur, ou `null` si succes.
+  Future<String?> requestPasswordReset(String identifier) async {
+    final repo = ref.read(authRepositoryProvider);
+    final result = await repo.requestPasswordReset(identifier);
+    return result.fold((failure) => failure.message, (_) => null);
+  }
+
+  /// Reinitialisation (etape 2) : verifie l'OTP et applique le nouveau mot de
+  /// passe (lot A5). Retourne un message d'erreur, ou `null` si succes.
+  Future<String?> confirmPasswordReset({
+    required String identifier,
+    required String otp,
+    required String newPassword,
+  }) async {
+    final repo = ref.read(authRepositoryProvider);
+    final result = await repo.confirmPasswordReset(
+      identifier: identifier,
+      otp: otp,
+      newPassword: newPassword,
+    );
+    return result.fold((failure) => failure.message, (_) => null);
+  }
+
   /// Inscription (etape 2). Retourne un message d'erreur, ou `null` si succes.
   /// N'authentifie pas automatiquement (compte en attente de validation KYC).
   Future<String?> register({

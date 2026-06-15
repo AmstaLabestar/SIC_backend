@@ -790,6 +790,48 @@ def _mark_device_trusted(agent, device_id, device_name=''):
     )
 
 
+def _resolve_user(identifier):
+    """Retrouve un User à partir d'un identifiant (téléphone, email ou username).
+    Utilisé par la réinitialisation de mot de passe (lot A5). Renvoie None si
+    aucun compte ne correspond."""
+    from django.contrib.auth.models import User
+    identifier = (identifier or '').strip()
+    if not identifier:
+        return None
+
+    # 1) Numéro de téléphone -> agent -> user
+    try:
+        national = TransactionValidator.validate_phone_number(identifier)
+        agent = (Agent.objects.filter(phone_number=national)
+                 .select_related('user').first())
+        if agent:
+            return agent.user
+    except ValueError:
+        pass
+
+    # 2) Email
+    if '@' in identifier:
+        user = User.objects.filter(email__iexact=identifier).first()
+        if user:
+            return user
+
+    # 3) Username (repli)
+    return User.objects.filter(username__iexact=identifier).first()
+
+
+def _revoke_all_sessions(user):
+    """Blackliste tous les refresh tokens en cours d'un utilisateur (A5).
+    Une réinitialisation de mot de passe doit invalider les sessions existantes."""
+    try:
+        from rest_framework_simplejwt.token_blacklist.models import (
+            OutstandingToken, BlacklistedToken,
+        )
+    except Exception:
+        return
+    for token in OutstandingToken.objects.filter(user=user):
+        BlacklistedToken.objects.get_or_create(token=token)
+
+
 class CustomTokenObtainPairView(generics.GenericAPIView):
     """
     Login avec JWT custom (ajoute agent_id, kyc_status, etc. dans le token).
@@ -905,6 +947,112 @@ class DeviceVerifyView(generics.GenericAPIView):
             ip_address=request.META.get('REMOTE_ADDR'),
         )
         return Response(serializer.validated_data, status=status.HTTP_200_OK)
+
+
+class PasswordResetRequestView(generics.GenericAPIView):
+    """
+    Demande de réinitialisation du mot de passe (lot A5).
+
+    POST /api/auth/password/reset/request/  {"identifier": "70123456"}
+    L'identifiant peut être un numéro de téléphone, un email ou un username.
+    Un OTP est envoyé à l'email du compte. Réponse volontairement **neutre**
+    (n'indique pas si le compte existe) pour empêcher l'énumération.
+    """
+    permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = 'otp'
+
+    def post(self, request):
+        identifier = (request.data.get('identifier') or '').strip()
+        user = _resolve_user(identifier)
+        if user and user.email:
+            from .services.otp import generate_and_send
+            generate_and_send(user.email, EmailOtp.PURPOSE_RESET)
+            log_activity(
+                user=user,
+                action="PASSWORD_RESET_REQUESTED",
+                description=f"Demande de réinitialisation pour {user.username}.",
+                level="WARNING",
+                ip_address=request.META.get('REMOTE_ADDR'),
+            )
+        ttl = int(getattr(settings, 'OTP_TTL_MINUTES', 10)) * 60
+        return Response(
+            {'message': "Si un compte correspond, un code de réinitialisation "
+                        "a été envoyé par email.",
+             'expires_in': ttl},
+            status=status.HTTP_200_OK,
+        )
+
+
+class PasswordResetConfirmView(generics.GenericAPIView):
+    """
+    Confirmation de réinitialisation du mot de passe (lot A5).
+
+    POST /api/auth/password/reset/confirm/
+    {"identifier": "...", "otp": "123456", "new_password": "..."}
+
+    Vérifie l'OTP, applique le nouveau mot de passe, révoque les sessions en
+    cours et efface le PIN (l'agent devra le recréer) — couvre aussi la
+    réinitialisation du PIN.
+    """
+    permission_classes = [AllowAny]
+    throttle_classes = [LoginRateThrottle]
+    throttle_scope = 'login'
+
+    def post(self, request):
+        from django.contrib.auth.password_validation import validate_password
+        from django.core.exceptions import ValidationError as DjangoValidationError
+
+        identifier = (request.data.get('identifier') or '').strip()
+        otp = (request.data.get('otp') or '').strip()
+        new_password = request.data.get('new_password') or ''
+
+        user = _resolve_user(identifier)
+        # Réponse générique si le compte est introuvable (anti-énumération).
+        if not user or not user.email:
+            return Response(
+                {'error': "Code invalide ou expiré. Demandez un nouveau code."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        from .services.otp import verify as verify_otp
+        ok, msg = verify_otp(user.email, otp, EmailOtp.PURPOSE_RESET)
+        if not ok:
+            return Response({'otp': [msg]}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            validate_password(new_password, user=user)
+        except DjangoValidationError as e:
+            return Response(
+                {'new_password': list(e.messages)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        user.set_password(new_password)
+        user.save(update_fields=['password'])
+        _revoke_all_sessions(user)
+
+        # Le PIN est lié à l'ancien mot de passe : on le réinitialise pour forcer
+        # une recréation après reconnexion (réinitialisation du PIN incluse).
+        agent = getattr(user, 'agent_profile', None)
+        if agent and agent.pin_code is not None:
+            agent.pin_code = None
+            agent.pin_attempts = 0
+            agent.pin_locked_until = None
+            agent.save(update_fields=['pin_code', 'pin_attempts', 'pin_locked_until'])
+
+        log_activity(
+            user=user, agent=agent,
+            action="PASSWORD_RESET_DONE",
+            description=f"Mot de passe réinitialisé pour {user.username}.",
+            level="SUCCESS",
+            ip_address=request.META.get('REMOTE_ADDR'),
+        )
+        return Response(
+            {'message': "Mot de passe réinitialisé. Connectez-vous avec votre "
+                        "nouveau mot de passe."},
+            status=status.HTTP_200_OK,
+        )
 
 
 class LogoutView(generics.GenericAPIView):

@@ -809,3 +809,89 @@ class DeviceBindingTest(APITestCase):
         })
         self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn('otp', resp.data)
+
+
+@override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
+class PasswordResetTest(APITestCase):
+    """Lot A5 : réinitialisation du mot de passe par OTP email."""
+
+    def setUp(self):
+        from django.core.cache import cache
+        cache.clear()
+        self.user = User.objects.create_user(
+            'resetuser', 'reset@test.com', 'OldPassw0rd1'
+        )
+        self.agent = Agent.objects.create(
+            user=self.user, phone_number='70900011',
+            first_name='R', last_name='U', kyc_status='PENDING',
+            pin_code='1234',
+        )
+
+    def _request(self, identifier='70900011'):
+        return self.client.post('/api/auth/password/reset/request/', {
+            'identifier': identifier,
+        })
+
+    def _latest_otp(self):
+        from core.models import EmailOtp
+        return EmailOtp.objects.filter(
+            email='reset@test.com', purpose=EmailOtp.PURPOSE_RESET, is_used=False
+        ).latest('created_at')
+
+    def test_request_par_telephone_envoie_otp(self):
+        from core.models import EmailOtp
+        resp = self._request('70900011')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertTrue(EmailOtp.objects.filter(
+            email='reset@test.com', purpose=EmailOtp.PURPOSE_RESET).exists())
+
+    def test_request_compte_inconnu_reste_neutre(self):
+        from core.models import EmailOtp
+        resp = self._request('70999999')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)  # pas d'enum
+        self.assertFalse(EmailOtp.objects.exists())
+
+    def test_confirm_change_le_mot_de_passe_et_efface_pin(self):
+        self._request('70900011')
+        otp = self._latest_otp()
+        resp = self.client.post('/api/auth/password/reset/confirm/', {
+            'identifier': '70900011', 'otp': otp.code,
+            'new_password': 'NewPassw0rd9',
+        })
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.user.refresh_from_db()
+        self.agent.refresh_from_db()
+        self.assertTrue(self.user.check_password('NewPassw0rd9'))
+        self.assertIsNone(self.agent.pin_code)
+
+    def test_confirm_login_avec_nouveau_mdp(self):
+        self._request('70900011')
+        otp = self._latest_otp()
+        self.client.post('/api/auth/password/reset/confirm/', {
+            'identifier': '70900011', 'otp': otp.code,
+            'new_password': 'NewPassw0rd9',
+        })
+        login = self.client.post('/api/auth/login/', {
+            'phone_number': '70900011', 'password': 'NewPassw0rd9',
+        })
+        self.assertEqual(login.status_code, status.HTTP_200_OK)
+
+    def test_confirm_mauvais_otp_refuse(self):
+        self._request('70900011')
+        resp = self.client.post('/api/auth/password/reset/confirm/', {
+            'identifier': '70900011', 'otp': '000000',
+            'new_password': 'NewPassw0rd9',
+        })
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('otp', resp.data)
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password('OldPassw0rd1'))
+
+    def test_confirm_mot_de_passe_faible_refuse(self):
+        self._request('70900011')
+        otp = self._latest_otp()
+        resp = self.client.post('/api/auth/password/reset/confirm/', {
+            'identifier': '70900011', 'otp': otp.code, 'new_password': '123',
+        })
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('new_password', resp.data)

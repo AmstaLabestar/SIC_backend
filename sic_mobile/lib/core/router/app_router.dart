@@ -7,6 +7,7 @@ import '../../features/alerts/presentation/screens/alerts_screen.dart';
 import '../../features/auth/presentation/providers/app_lock_provider.dart';
 import '../../features/auth/presentation/providers/auth_provider.dart';
 import '../../features/auth/presentation/screens/device_verify_screen.dart';
+import '../../features/auth/presentation/screens/forgot_password_screen.dart';
 import '../../features/auth/presentation/screens/lock_screen.dart';
 import '../../features/auth/presentation/screens/login_screen.dart';
 import '../../features/auth/presentation/screens/pin_setup_screen.dart';
@@ -48,7 +49,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           location == '/splash';
 
       if (!isLoggedIn) {
-        const loggedOutOk = {'/login', '/register', '/verify-device'};
+        const loggedOutOk = {
+          '/login',
+          '/register',
+          '/verify-device',
+          '/forgot-password',
+        };
         return loggedOutOk.contains(location) ? null : '/login';
       }
       // Connecte mais sans code PIN -> creation obligatoire avant tout acces.
@@ -80,6 +86,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/register',
         builder: (context, state) => const RegisterScreen(),
+      ),
+      GoRoute(
+        path: '/forgot-password',
+        builder: (context, state) => const ForgotPasswordScreen(),
       ),
       GoRoute(
         path: '/verify-device',

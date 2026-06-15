@@ -25,6 +25,8 @@ class ApiConstants {
   static const otpSend = '/auth/otp/send/';
   static const refresh = '/auth/refresh/';
   static const logout = '/auth/logout/';
+  static const passwordResetRequest = '/auth/password/reset/request/';
+  static const passwordResetConfirm = '/auth/password/reset/confirm/';
   static const profile = '/auth/profile/';
   static const limits = '/auth/limits/';
   static const pinSetup = '/auth/pin/setup/';

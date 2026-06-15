@@ -11,6 +11,7 @@ from .views import (
     TransactionViewSet, PuceViewSet, AgentProfileView, AccountLimitsView,
     RegisterView, OtpSendView, CommissionInfoView, HealthCheckView,
     CustomTokenObtainPairView, DeviceVerifyView, LogoutView,
+    PasswordResetRequestView, PasswordResetConfirmView,
     PinSetupView, PinVerifyView,
     BiometricRegisterView, BiometricLoginView, BiometricDeviceListView
 )
@@ -28,6 +29,8 @@ urlpatterns = [
     path('auth/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('auth/verify/', TokenVerifyView.as_view(), name='token_verify'),
     path('auth/logout/', LogoutView.as_view(), name='logout'),
+    path('auth/password/reset/request/', PasswordResetRequestView.as_view(), name='password_reset_request'),
+    path('auth/password/reset/confirm/', PasswordResetConfirmView.as_view(), name='password_reset_confirm'),
     path('auth/profile/', AgentProfileView.as_view(), name='agent_profile'),
     path('auth/limits/', AccountLimitsView.as_view(), name='account_limits'),
 

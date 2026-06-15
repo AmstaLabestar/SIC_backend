@@ -199,7 +199,19 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ),
                   ),
                 ],
-                const SizedBox(height: AppSpacing.md),
+                const SizedBox(height: AppSpacing.sm),
+                Center(
+                  child: TextButton(
+                    onPressed: () => context.go('/forgot-password'),
+                    child: Text(
+                      'Mot de passe oublie ?',
+                      style: AppTextStyles.caption.copyWith(
+                        color: AppColors.textSecondary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
                 Center(
                   child: TextButton(
                     onPressed: () => context.go('/register'),

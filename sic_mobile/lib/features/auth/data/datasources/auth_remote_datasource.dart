@@ -82,6 +82,34 @@ class AuthRemoteDatasource {
     await _dio.post<void>(ApiConstants.logout, data: {'refresh': refresh});
   }
 
+  /// Demande un code de reinitialisation du mot de passe (`POST
+  /// /auth/password/reset/request/`). [identifier] = telephone, email ou
+  /// username. Reponse neutre cote backend (anti-enumeration).
+  Future<void> requestPasswordReset(String identifier) async {
+    await _dio.post<Map<String, dynamic>>(
+      ApiConstants.passwordResetRequest,
+      data: {'identifier': identifier},
+    );
+  }
+
+  /// Confirme la reinitialisation (`POST /auth/password/reset/confirm/`) :
+  /// verifie l'OTP et applique le nouveau mot de passe. Leve une [DioException]
+  /// 400 si OTP invalide ou mot de passe trop faible.
+  Future<void> confirmPasswordReset({
+    required String identifier,
+    required String otp,
+    required String newPassword,
+  }) async {
+    await _dio.post<Map<String, dynamic>>(
+      ApiConstants.passwordResetConfirm,
+      data: {
+        'identifier': identifier,
+        'otp': otp,
+        'new_password': newPassword,
+      },
+    );
+  }
+
   /// Envoie un code OTP de verification a l'email (`POST /auth/otp/send/`).
   Future<void> sendOtp(String email) async {
     await _dio.post<Map<String, dynamic>>(

@@ -116,6 +116,47 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   @override
+  Future<Either<Failure, Unit>> requestPasswordReset(String identifier) async {
+    try {
+      await _datasource.requestPasswordReset(identifier);
+      return const Right(unit);
+    } catch (error) {
+      return Left(mapDioErrorToFailure(error));
+    }
+  }
+
+  @override
+  Future<Either<Failure, Unit>> confirmPasswordReset({
+    required String identifier,
+    required String otp,
+    required String newPassword,
+  }) async {
+    try {
+      await _datasource.confirmPasswordReset(
+        identifier: identifier,
+        otp: otp,
+        newPassword: newPassword,
+      );
+      return const Right(unit);
+    } catch (error) {
+      // 400 = OTP invalide ({'otp': [...]}) ou mot de passe faible
+      // ({'new_password': [...]}). On restitue un message lisible.
+      if (error is DioException && error.response?.statusCode == 400) {
+        final data = error.response?.data;
+        if (data is Map) {
+          for (final key in ['otp', 'new_password', 'error']) {
+            final v = data[key];
+            if (v is List && v.isNotEmpty) return Left(ValidationFailure(v.first.toString()));
+            if (v is String) return Left(ValidationFailure(v));
+          }
+        }
+        return const Left(ValidationFailure('Code invalide ou mot de passe trop faible.'));
+      }
+      return Left(mapDioErrorToFailure(error));
+    }
+  }
+
+  @override
   Future<Either<Failure, Unit>> register({
     required String username,
     required String email,

@@ -19,6 +19,18 @@ abstract class AuthRepository {
   /// Envoie un code OTP de verification a l'email (etape 1 de l'inscription).
   Future<Either<Failure, Unit>> sendOtp(String email);
 
+  /// Demande un code de reinitialisation du mot de passe (lot A5).
+  /// [identifier] = numero de telephone, email ou username.
+  Future<Either<Failure, Unit>> requestPasswordReset(String identifier);
+
+  /// Confirme la reinitialisation : verifie l'OTP et applique le nouveau mot
+  /// de passe (lot A5).
+  Future<Either<Failure, Unit>> confirmPasswordReset({
+    required String identifier,
+    required String otp,
+    required String newPassword,
+  });
+
   /// Inscrit un nouvel agent (compte cree en attente de validation KYC).
   /// [otp] : code recu par email (verifie cote backend avant creation).
   Future<Either<Failure, Unit>> register({
