@@ -651,6 +651,37 @@ class EmailOtpTest(TestCase):
             self.skipTest('collision OTP improbable')
         self.assertIn('incorrect', msg.lower())
 
+    def test_verify_verrouille_apres_max_tentatives(self):
+        """Apres MAX_ATTEMPTS essais rates, le code est consomme (verrou)."""
+        from api.services.otp import generate_and_send, verify
+        from core.models import EmailOtp
+        generate_and_send('lock@test.com', 'register')
+        good = EmailOtp.objects.get(email='lock@test.com', is_used=False).code
+        wrong = '000000' if good != '000000' else '111111'
+
+        # MAX_ATTEMPTS essais errones : le dernier renvoie le message de verrou.
+        for i in range(EmailOtp.MAX_ATTEMPTS):
+            ok, msg = verify('lock@test.com', wrong, 'register')
+            self.assertFalse(ok)
+        self.assertIn('trop de tentatives', msg.lower())
+
+        # Code consomme : meme le bon code est desormais refuse (renvoi requis).
+        ok_good, msg_good = verify('lock@test.com', good, 'register')
+        self.assertFalse(ok_good)
+        self.assertIn('nouveau code', msg_good.lower())
+
+    def test_verify_bon_code_avant_verrou(self):
+        """Quelques essais rates puis le bon code : succes."""
+        from api.services.otp import generate_and_send, verify
+        from core.models import EmailOtp
+        generate_and_send('ok2@test.com', 'register')
+        good = EmailOtp.objects.get(email='ok2@test.com', is_used=False).code
+        wrong = '000000' if good != '000000' else '111111'
+        verify('ok2@test.com', wrong, 'register')
+        verify('ok2@test.com', wrong, 'register')
+        ok, _ = verify('ok2@test.com', good, 'register')
+        self.assertTrue(ok)
+
     def test_register_sans_otp_refuse(self):
         from api.serializers import RegisterSerializer
         data = {

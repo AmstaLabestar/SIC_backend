@@ -5,6 +5,7 @@ Génère, envoie et vérifie des codes à 6 chiffres. Canal email en v1 (backend
 console en dev, SMTP via env en prod) — interchangeable vers SMS/WhatsApp plus
 tard sans toucher les appelants.
 """
+import logging
 import secrets
 from datetime import timedelta
 
@@ -13,6 +14,8 @@ from django.core.mail import send_mail
 from django.utils import timezone
 
 from core.models import EmailOtp
+
+logger = logging.getLogger('sic.security')
 
 
 def _ttl_minutes():
@@ -66,12 +69,27 @@ def verify(email, code, purpose=EmailOtp.PURPOSE_REGISTER):
     )
     if otp is None:
         return False, 'Aucun code en attente. Demandez un nouveau code.'
-    if not otp.is_valid():
+
+    # Verrou anti brute-force : trop de tentatives -> code consomme, renvoi force.
+    if otp.attempts >= EmailOtp.MAX_ATTEMPTS:
+        otp.is_used = True
+        otp.save(update_fields=['is_used'])
+        logger.warning('OTP verrouille (trop de tentatives) email=%s purpose=%s', email, purpose)
+        return False, 'Trop de tentatives. Demandez un nouveau code.'
+
+    if otp.expires_at <= timezone.now():
         return False, 'Code expiré. Demandez un nouveau code.'
+
     if otp.code != code:
         otp.attempts += 1
+        # La tentative qui atteint le plafond consomme le code immediatement.
+        if otp.attempts >= EmailOtp.MAX_ATTEMPTS:
+            otp.is_used = True
+            otp.save(update_fields=['attempts', 'is_used'])
+            logger.warning('OTP verrouille (trop de tentatives) email=%s purpose=%s', email, purpose)
+            return False, 'Trop de tentatives. Demandez un nouveau code.'
         otp.save(update_fields=['attempts'])
-        remaining = max(0, EmailOtp.MAX_ATTEMPTS - otp.attempts)
+        remaining = EmailOtp.MAX_ATTEMPTS - otp.attempts
         return False, f'Code incorrect. {remaining} tentative(s) restante(s).'
 
     otp.is_used = True
