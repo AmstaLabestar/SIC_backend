@@ -49,7 +49,7 @@ class _StatsContent extends StatelessWidget {
         Text('Stats', style: AppTextStyles.titleLarge),
         const SizedBox(height: AppSpacing.xs),
         Text(
-          'Suivez les revenus et l activite de votre point de vente.',
+          'Suivez l activite et le volume sauve par la compensation.',
           style: AppTextStyles.bodyMedium,
         ),
         const SizedBox(height: AppSpacing.lg),
@@ -63,7 +63,7 @@ class _StatsContent extends StatelessWidget {
           icon: Icons.receipt_long_outlined,
           title: 'Historique transactions',
           value: '${summary.transactionCountToday} operations aujourd hui',
-          caption: 'Le detail arrive avec la phase Operations.',
+          caption: 'Detail complet dans l onglet Transactions.',
         ),
         const SizedBox(height: AppSpacing.md),
         const _StatInfoTile(

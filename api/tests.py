@@ -1017,6 +1017,8 @@ class PinStrengthTest(APITestCase):
         self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {refresh.access_token}')
 
     def test_unit_weak_pin_reason(self):
+        # Parite front/back : meme corpus que sic_mobile/test/core/pin_rules_test.dart
+        # (toute modif ici doit y etre repercutee).
         from api.services.pin_rules import weak_pin_reason
         for weak in ['0000', '1111', '1234', '4321', '2345', '987654', '111111']:
             self.assertIsNotNone(weak_pin_reason(weak), f'{weak} devrait etre faible')
