@@ -1182,3 +1182,46 @@ class ThrottlingTest(APITestCase):
             })
             last_status = resp.status_code
         self.assertEqual(last_status, status.HTTP_429_TOO_MANY_REQUESTS)
+
+
+class CompensationWebhookTest(TestCase):
+    """Securite fonds : le webhook de compensation est idempotent (anti rejeu)."""
+
+    def setUp(self):
+        self.user = User.objects.create_user('whuser', 'wh@test.com', 'Passw0rd123')
+        self.agent = Agent.objects.create(
+            user=self.user, phone_number='70554433',
+            first_name='W', last_name='H', kyc_status='APPROVED',
+        )
+        self.puce = Puce.objects.create(
+            agent=self.agent, operator='ORANGE',
+            phone_number='+224620010001', balance=Decimal('10000.00'),
+        )
+        self.tx = Transaction.objects.create(
+            agent=self.agent, type='DEPOT', status='PENDING',
+            amount=Decimal('3000.00'), target_operator='ORANGE',
+            target_phone_number='70000009',
+        )
+        self.detail = CompensationDetail.objects.create(
+            transaction=self.tx, puce=self.puce,
+            amount_deducted=Decimal('3000.00'), status='PENDING',
+            cinetpay_ref='REF_TEST_1',
+        )
+
+    def test_webhook_success_debite_une_seule_fois(self):
+        # 1er webhook SUCCESS : la puce est debitee de 3000 -> 7000.
+        CompensationEngine.process_webhook('REF_TEST_1', 'SUCCESS')
+        self.puce.refresh_from_db()
+        self.assertEqual(self.puce.balance, Decimal('7000.00'))
+        self.detail.refresh_from_db()
+        self.assertEqual(self.detail.status, 'SUCCESS')
+
+        # Rejeu du meme webhook : aucun second debit (idempotence).
+        CompensationEngine.process_webhook('REF_TEST_1', 'SUCCESS')
+        self.puce.refresh_from_db()
+        self.assertEqual(self.puce.balance, Decimal('7000.00'))
+
+    def test_webhook_reference_inconnue(self):
+        tx, ok = CompensationEngine.process_webhook('REF_INEXISTANTE', 'SUCCESS')
+        self.assertIsNone(tx)
+        self.assertFalse(ok)

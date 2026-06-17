@@ -546,13 +546,22 @@ class CompensationEngine:
     @staticmethod
     @transaction.atomic
     def _process_success(detail, tx):
-        """Traite le succès d'un détail de compensation."""
-        # Mettre à jour le détail
+        """Traite le succès d'un détail de compensation.
+
+        Idempotent (un rejeu du webhook ne re-débite pas) et protégé contre les
+        mises à jour concurrentes (verrou de ligne sur le détail et la puce).
+        """
+        # Verrou + relecture du détail : si déjà traité, on s'arrête (idempotence).
+        detail = CompensationDetail.objects.select_for_update().get(id=detail.id)
+        if detail.status == 'SUCCESS':
+            logger.info(f"Webhook rejoué ignoré pour le détail {detail.id} (déjà SUCCESS)")
+            return tx, False
+
         detail.status = 'SUCCESS'
         detail.save()
 
-        # Déduire le solde de la puce
-        puce = detail.puce
+        # Déduire le solde de la puce sous verrou (évite les lost-updates).
+        puce = Puce.objects.select_for_update().get(id=detail.puce_id)
         puce.balance -= detail.amount_deducted
         puce.save()
 
