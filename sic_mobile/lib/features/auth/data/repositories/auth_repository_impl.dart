@@ -106,10 +106,9 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   @override
-  Future<Either<Failure, Unit>> sendOtp(String email) async {
+  Future<Either<Failure, String?>> sendOtp(String email) async {
     try {
-      await _datasource.sendOtp(email);
-      return const Right(unit);
+      return Right(await _datasource.sendOtp(email));
     } catch (error) {
       return Left(mapDioErrorToFailure(error));
     }

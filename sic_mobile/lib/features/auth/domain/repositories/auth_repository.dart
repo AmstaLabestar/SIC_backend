@@ -17,7 +17,8 @@ abstract class AuthRepository {
   });
 
   /// Envoie un code OTP de verification a l'email (etape 1 de l'inscription).
-  Future<Either<Failure, Unit>> sendOtp(String email);
+  /// Retourne le `dev_code` si le backend l'expose (DEBUG), sinon null.
+  Future<Either<Failure, String?>> sendOtp(String email);
 
   /// Demande un code de reinitialisation du mot de passe (lot A5).
   /// [identifier] = numero de telephone, email ou username.

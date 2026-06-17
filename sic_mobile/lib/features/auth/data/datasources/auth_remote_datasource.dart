@@ -137,11 +137,13 @@ class AuthRemoteDatasource {
   }
 
   /// Envoie un code OTP de verification a l'email (`POST /auth/otp/send/`).
-  Future<void> sendOtp(String email) async {
-    await _dio.post<Map<String, dynamic>>(
+  /// Retourne le `dev_code` si le backend l'expose (mode DEBUG), sinon null.
+  Future<String?> sendOtp(String email) async {
+    final resp = await _dio.post<Map<String, dynamic>>(
       ApiConstants.otpSend,
       data: {'email': email, 'purpose': 'register'},
     );
+    return resp.data?['dev_code'] as String?;
   }
 
   /// Inscription d'un nouvel agent (`POST /auth/register/`).

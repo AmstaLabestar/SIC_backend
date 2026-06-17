@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -44,6 +45,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   bool _otpPhase = false;
   String _otp = '';
   bool _otpError = false;
+  String? _devCode; // code expose par le backend en DEBUG (helper dev)
   int _resendIn = 0;
   Timer? _timer;
 
@@ -75,21 +77,22 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     });
     HapticFeedback.selectionClick();
 
-    final error = await ref.read(authControllerProvider.notifier).sendOtp(
+    final result = await ref.read(authControllerProvider.notifier).sendOtp(
           _emailValue,
         );
 
     if (!mounted) return;
     setState(() {
       _submitting = false;
-      _error = error;
-      if (error == null) {
+      _error = result.error;
+      if (result.error == null) {
         _otpPhase = true;
         _otp = '';
         _otpError = false;
+        _devCode = result.devCode;
       }
     });
-    if (error == null) _startResendTimer();
+    if (result.error == null) _startResendTimer();
   }
 
   void _startResendTimer() {
@@ -104,17 +107,18 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
   Future<void> _resend() async {
     if (_resendIn > 0) return;
-    final error =
+    final result =
         await ref.read(authControllerProvider.notifier).sendOtp(_emailValue);
     if (!mounted) return;
-    if (error != null) {
-      setState(() => _error = error);
+    if (result.error != null) {
+      setState(() => _error = result.error);
       return;
     }
     setState(() {
       _otp = '';
       _otpError = false;
       _error = null;
+      _devCode = result.devCode;
     });
     _startResendTimer();
   }
@@ -228,6 +232,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             onLight: true,
           ),
         ),
+        if (kDebugMode && _devCode != null) _buildDevBanner(),
         Expanded(
           child: SafeArea(
             top: false,
@@ -455,6 +460,54 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         padding: const EdgeInsets.only(bottom: AppSpacing.sm),
         child: Text(text, style: AppTextStyles.microLabel),
       );
+
+  /// Bannière de confort dev (DEBUG uniquement) : affiche le code OTP renvoyé
+  /// par le backend et le pré-remplit au toucher. Jamais compilée en release.
+  Widget _buildDevBanner() {
+    final code = _devCode!;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+          AppSpacing.lg, AppSpacing.sm, AppSpacing.lg, 0),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: _submitting
+              ? null
+              : () {
+                  setState(() {
+                    _otpError = false;
+                    _otp = code;
+                  });
+                  _register();
+                },
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            padding: const EdgeInsets.all(AppSpacing.sm),
+            decoration: BoxDecoration(
+              color: AppColors.warning.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.warning.withValues(alpha: 0.4)),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.bug_report_outlined,
+                    size: 16, color: AppColors.warning),
+                const SizedBox(width: 8),
+                Text(
+                  'DEV · code $code — toucher pour remplir',
+                  style: AppTextStyles.caption.copyWith(
+                    color: AppColors.warning,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 
   String _maskEmail(String email) {
     final at = email.indexOf('@');

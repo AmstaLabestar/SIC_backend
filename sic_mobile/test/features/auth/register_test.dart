@@ -13,7 +13,7 @@ class _FakeAuthRepository implements AuthRepository {
   Map<String, String>? lastRegister;
 
   @override
-  Future<Either<Failure, Unit>> sendOtp(String email) async => const Right(unit);
+  Future<Either<Failure, String?>> sendOtp(String email) async => const Right(null);
 
   @override
   Future<Either<Failure, Unit>> requestPasswordReset(String identifier) async =>

@@ -117,10 +117,17 @@ class OtpSendView(generics.GenericAPIView):
         purpose = request.data.get('purpose') or 'register'
         from .services.otp import generate_and_send
         expires_in = generate_and_send(email, purpose)
-        return Response(
-            {'message': 'Code de vérification envoyé.', 'expires_in': expires_in},
-            status=status.HTTP_200_OK,
-        )
+        payload = {'message': 'Code de vérification envoyé.', 'expires_in': expires_in}
+        # Helper dev : en DEBUG uniquement, exposer le code pour eviter de fouiller
+        # les logs (jamais en production : l'email reste le seul canal).
+        if settings.DEBUG:
+            last = (
+                EmailOtp.objects.filter(email=email, purpose=purpose, is_used=False)
+                .order_by('-created_at').first()
+            )
+            if last:
+                payload['dev_code'] = last.code
+        return Response(payload, status=status.HTTP_200_OK)
 
 
 class AgentProfileView(generics.RetrieveAPIView):

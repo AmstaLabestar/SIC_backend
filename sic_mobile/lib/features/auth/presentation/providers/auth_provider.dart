@@ -135,12 +135,16 @@ class AuthController extends AsyncNotifier<AuthUser?> {
     ref.invalidate(transactionsNotifierProvider);
   }
 
-  /// Etape 1 de l'inscription : envoie le code OTP a l'email. Retourne un
-  /// message d'erreur, ou `null` si succes.
-  Future<String?> sendOtp(String email) async {
+  /// Etape 1 de l'inscription : envoie le code OTP a l'email. Retourne
+  /// `error` (message ou null si succes) et `devCode` (code expose en DEBUG
+  /// par le backend, sinon null) pour le pre-remplissage dev.
+  Future<({String? error, String? devCode})> sendOtp(String email) async {
     final repo = ref.read(authRepositoryProvider);
     final result = await repo.sendOtp(email);
-    return result.fold((failure) => failure.message, (_) => null);
+    return result.fold(
+      (failure) => (error: failure.message, devCode: null),
+      (devCode) => (error: null, devCode: devCode),
+    );
   }
 
   /// Reinitialisation (etape 1) : demande un code par email (lot A5).
