@@ -5,10 +5,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/constants/app_text_styles.dart';
+import '../../../../core/constants/operators.dart';
 import '../../../../core/utils/validators.dart';
+import '../../../../core/widgets/operator_selector.dart';
 import '../../../../core/widgets/sic_button.dart';
-import '../../../sim_management/presentation/providers/sim_provider.dart';
-import '../../../sim_management/presentation/widgets/operator_selector.dart';
 import '../providers/dashboard_provider.dart';
 
 /// Fiche d'ajout d'une SIM : operateur + numero, puis creation cote backend
@@ -37,7 +37,7 @@ class _AddSimSheetState extends ConsumerState<AddSimSheet> {
   @override
   void initState() {
     super.initState();
-    final operators = ref.read(availableOperatorsProvider);
+    const operators = kAvailableOperators;
     _operatorCode = operators.keys.isNotEmpty ? operators.keys.first : 'OM';
   }
 
@@ -49,7 +49,7 @@ class _AddSimSheetState extends ConsumerState<AddSimSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final operators = ref.watch(availableOperatorsProvider);
+    const operators = kAvailableOperators;
 
     return Padding(
       padding: EdgeInsets.only(

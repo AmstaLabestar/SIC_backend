@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 
-import '../../../../core/constants/app_colors.dart';
-import '../../../../core/constants/app_spacing.dart';
-import '../../../../core/constants/app_text_styles.dart';
-import '../../../../core/widgets/operator_logo.dart';
+import '../constants/app_colors.dart';
+import '../constants/app_spacing.dart';
+import '../constants/app_text_styles.dart';
+import 'operator_logo.dart';
 
+/// Grille 2 colonnes de selection d'operateur. Widget pur : la liste
+/// d'operateurs est passee en parametre (cf. [kAvailableOperators]).
 class OperatorSelector extends StatelessWidget {
   const OperatorSelector({
     super.key,

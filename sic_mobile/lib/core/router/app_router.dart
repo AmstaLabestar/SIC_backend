@@ -17,7 +17,6 @@ import '../../features/auth/presentation/screens/splash_screen.dart';
 import '../../features/client/presentation/screens/client_home_screen.dart';
 import '../../features/dashboard/presentation/screens/dashboard_screen.dart';
 import '../../features/settings/presentation/screens/settings_screen.dart';
-import '../../features/sim_management/presentation/screens/sim_management_screen.dart';
 import '../../features/stats/presentation/screens/stats_screen.dart';
 import '../../features/transactions/presentation/screens/money_operation_screen.dart';
 import '../../features/transactions/presentation/screens/transactions_screen.dart';
@@ -160,10 +159,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/dashboard/stats',
             builder: (context, state) => const StatsScreen(),
-          ),
-          GoRoute(
-            path: '/dashboard/sims',
-            builder: (context, state) => const SimManagementScreen(),
           ),
           GoRoute(
             path: '/dashboard/alerts',
