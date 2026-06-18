@@ -23,7 +23,7 @@ from .serializers import (
     DepositSerializer, WithdrawSerializer, ConversionSerializer,
     AgentSerializer, PuceSerializer, TransactionSerializer, RegisterSerializer,
     CustomTokenObtainPairSerializer, PinSetupSerializer, PinVerifySerializer,
-    BiometricRegisterSerializer, BiometricLoginSerializer
+    BiometricRegisterSerializer, BiometricLoginSerializer, AlertConfigSerializer
 )
 from .services.compensation_engine import (
     CompensationEngine, CommissionCalculator, TransactionValidator
@@ -31,7 +31,7 @@ from .services.compensation_engine import (
 from .services.limits import LimitsEngine
 from core.models import (
     Transaction, CompensationDetail, Puce, Agent, BiometricDevice, TrustedDevice,
-    EmailOtp
+    EmailOtp, AlertConfig
 )
 from core.tasks import check_transaction_timeout
 from core.utils import log_activity
@@ -347,6 +347,46 @@ class PuceViewSet(viewsets.ModelViewSet):
             'message': f'Solde rechargé: {amount} FCFA',
             'new_balance': puce.balance
         })
+
+
+class AlertConfigViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin,
+                         mixins.UpdateModelMixin, viewsets.GenericViewSet):
+    """
+    ViewSet des seuils d'alerte de solde (par puce).
+
+    GET   /api/alerts/        - Liste des alertes des puces de l'agent
+    GET   /api/alerts/{id}/   - Détail d'une alerte
+    PATCH /api/alerts/{id}/   - Modifier le seuil / l'activation
+
+    Pas de create/delete : le cycle de vie de l'alerte suit la puce
+    (créée par signal, supprimée en cascade). Scope = puces de l'agent.
+    """
+    serializer_class = AlertConfigSerializer
+    permission_classes = [IsAuthenticated]
+    pagination_class = StandardResultsSetPagination
+
+    def get_queryset(self):
+        agent = getattr(self.request.user, 'agent_profile', None)
+        if agent:
+            return (AlertConfig.objects
+                    .filter(puce__agent=agent)
+                    .select_related('puce')
+                    .order_by('puce__created_at'))
+        return AlertConfig.objects.none()
+
+    def perform_update(self, serializer):
+        config = serializer.save()
+        log_activity(
+            agent=getattr(self.request.user, 'agent_profile', None),
+            action="ALERT_UPDATED",
+            description=(
+                f"Seuil d'alerte {config.puce.operator} "
+                f"{config.puce.phone_number}: {config.threshold} FCFA "
+                f"({'actif' if config.is_enabled else 'inactif'})"
+            ),
+            level="INFO",
+            ip_address=self.request.META.get('REMOTE_ADDR')
+        )
 
 
 class TransactionViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet):

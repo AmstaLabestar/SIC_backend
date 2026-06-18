@@ -10,8 +10,9 @@ import '../models/compensation_volume_model.dart';
 /// - `/auth/profile/` -> agent + puces (soldes) ;
 /// - `/transactions/` -> nombre d'operations du jour + benefice du jour.
 ///
-/// Le backend n'expose pas de seuil d'alerte par puce ; on applique un seuil
-/// par defaut cote client.
+/// Le seuil d'alerte configurable par puce vit dans la feature `alerts`
+/// (`/alerts/`) ; ici on applique un seuil par defaut pour la coloration du
+/// solde sur le dashboard.
 class DashboardRemoteDatasource {
   const DashboardRemoteDatasource(this._dio);
 

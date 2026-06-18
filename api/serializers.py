@@ -7,7 +7,7 @@ from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
-from core.models import Transaction, CompensationDetail, Puce, Agent, BiometricDevice
+from core.models import Transaction, CompensationDetail, Puce, Agent, BiometricDevice, AlertConfig
 
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
@@ -701,6 +701,35 @@ class PuceSerializer(serializers.ModelSerializer):
             attrs['operator'] = operator
 
         return attrs
+
+
+class AlertConfigSerializer(serializers.ModelSerializer):
+    """
+    Seuil d'alerte de solde, par puce.
+
+    Lecture seule des champs issus de la puce (operateur, numero, solde) ;
+    seuls `threshold` et `is_enabled` sont modifiables par l'agent.
+    """
+    puce_id = serializers.UUIDField(source='puce.id', read_only=True)
+    operator = serializers.CharField(source='puce.operator', read_only=True)
+    phone_number = serializers.CharField(
+        source='puce.phone_number', read_only=True
+    )
+    balance = serializers.DecimalField(
+        source='puce.balance', max_digits=12, decimal_places=2, read_only=True
+    )
+
+    class Meta:
+        model = AlertConfig
+        fields = ['id', 'puce_id', 'operator', 'phone_number', 'balance',
+                  'threshold', 'is_enabled', 'updated_at']
+        read_only_fields = ['id', 'puce_id', 'operator', 'phone_number',
+                            'balance', 'updated_at']
+
+    def validate_threshold(self, value):
+        if value < 0:
+            raise serializers.ValidationError("Le seuil doit être positif.")
+        return value
 
 
 class AgentSerializer(serializers.ModelSerializer):

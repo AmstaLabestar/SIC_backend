@@ -5,10 +5,10 @@ import 'package:sic_mobile/core/usecases/usecase.dart';
 import 'package:sic_mobile/features/alerts/domain/entities/alert_config.dart';
 import 'package:sic_mobile/features/alerts/domain/repositories/alert_repository.dart';
 import 'package:sic_mobile/features/alerts/domain/usecases/get_alert_configs.dart';
-import 'package:sic_mobile/features/alerts/domain/usecases/save_alert_config.dart';
+import 'package:sic_mobile/features/alerts/domain/usecases/update_alert_config.dart';
 
 void main() {
-  test('should return alert configs when repository call is successful', () async {
+  test('GetAlertConfigs renvoie les alertes en cas de succes', () async {
     final repository = _FakeAlertRepository();
     final usecase = GetAlertConfigs(repository);
 
@@ -17,60 +17,74 @@ void main() {
     expect(result.getOrElse(() => []), hasLength(1));
   });
 
-  test('should save alert config when repository call is successful', () async {
+  test('UpdateAlertConfig transmet id/seuil/activation au repo', () async {
     final repository = _FakeAlertRepository();
-    final usecase = SaveAlertConfig(repository);
-    final config = _alertConfig.copyWith(threshold: 75000);
+    final usecase = UpdateAlertConfig(repository);
 
-    final result = await usecase(config);
+    final result = await usecase(const UpdateAlertConfigParams(
+      id: 'cfg-1',
+      threshold: 75000,
+      isEnabled: false,
+    ));
 
     expect(result.isRight(), isTrue);
-    expect(repository.lastSavedThreshold, 75000);
+    expect(repository.lastId, 'cfg-1');
+    expect(repository.lastThreshold, 75000);
+    expect(repository.lastIsEnabled, isFalse);
   });
 
-  test('should return Failure when repository call fails', () async {
+  test('GetAlertConfigs propage la Failure', () async {
     final repository = _FakeAlertRepository(
-      failure: const CacheFailure('Cache error'),
+      failure: const ServerFailure('Erreur reseau'),
     );
     final usecase = GetAlertConfigs(repository);
 
     final result = await usecase(const NoParams());
 
     expect(result, const Left<Failure, List<AlertConfig>>(
-      CacheFailure('Cache error'),
+      ServerFailure('Erreur reseau'),
     ));
   });
 }
 
 final _alertConfig = AlertConfig(
+  id: 'cfg-1',
+  puceId: 'puce-1',
   operatorCode: 'OM',
   operatorName: 'Orange Money',
+  phoneNumber: '+22670000001',
   isEnabled: true,
   threshold: 50000,
-  lastUpdated: DateTime(2024, 1, 15),
+  lastUpdated: DateTime(2026, 1, 15),
 );
 
 class _FakeAlertRepository implements AlertRepository {
   _FakeAlertRepository({this.failure});
 
   final Failure? failure;
-  double? lastSavedThreshold;
+  String? lastId;
+  double? lastThreshold;
+  bool? lastIsEnabled;
 
   @override
   Future<Either<Failure, List<AlertConfig>>> getAlertConfigs() async {
     final failure = this.failure;
-    if (failure != null) {
-      return Left(failure);
-    }
-
+    if (failure != null) return Left(failure);
     return Right([_alertConfig]);
   }
 
   @override
-  Future<Either<Failure, AlertConfig>> saveAlertConfig(
-    AlertConfig config,
-  ) async {
-    lastSavedThreshold = config.threshold;
-    return Right(config);
+  Future<Either<Failure, AlertConfig>> updateAlertConfig({
+    required String id,
+    required double threshold,
+    required bool isEnabled,
+  }) async {
+    lastId = id;
+    lastThreshold = threshold;
+    lastIsEnabled = isEnabled;
+    return Right(_alertConfig.copyWith(
+      threshold: threshold,
+      isEnabled: isEnabled,
+    ));
   }
 }

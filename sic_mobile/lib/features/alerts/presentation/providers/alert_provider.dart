@@ -1,27 +1,30 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/network/network_providers.dart';
 import '../../../../core/usecases/usecase.dart';
-import '../../data/datasources/alert_local_datasource.dart';
+import '../../data/datasources/alert_remote_datasource.dart';
 import '../../data/repositories/alert_repository_impl.dart';
 import '../../domain/entities/alert_config.dart';
 import '../../domain/repositories/alert_repository.dart';
 import '../../domain/usecases/get_alert_configs.dart';
-import '../../domain/usecases/save_alert_config.dart';
+import '../../domain/usecases/update_alert_config.dart';
 
-final alertLocalDatasourceProvider = Provider<AlertLocalDatasource>(
-  (ref) => const AlertLocalDatasource(),
+final alertRemoteDatasourceProvider = Provider<AlertRemoteDatasource>(
+  (ref) => AlertRemoteDatasource(ref.watch(dioProvider)),
 );
 
+/// Point de bascule unique de la feature : changer la source des alertes
+/// (remote, cache local, mock de test) se fait ici seul.
 final alertRepositoryProvider = Provider<AlertRepository>((ref) {
-  return AlertRepositoryImpl(ref.watch(alertLocalDatasourceProvider));
+  return AlertRepositoryImpl(ref.watch(alertRemoteDatasourceProvider));
 });
 
 final getAlertConfigsProvider = Provider<GetAlertConfigs>((ref) {
   return GetAlertConfigs(ref.watch(alertRepositoryProvider));
 });
 
-final saveAlertConfigProvider = Provider<SaveAlertConfig>((ref) {
-  return SaveAlertConfig(ref.watch(alertRepositoryProvider));
+final updateAlertConfigProvider = Provider<UpdateAlertConfig>((ref) {
+  return UpdateAlertConfig(ref.watch(alertRepositoryProvider));
 });
 
 final alertNotifierProvider =
@@ -41,8 +44,14 @@ class AlertNotifier extends AsyncNotifier<List<AlertConfig>> {
   }
 
   Future<void> save(AlertConfig config) async {
-    final usecase = ref.read(saveAlertConfigProvider);
-    final result = await usecase(config);
+    final usecase = ref.read(updateAlertConfigProvider);
+    final result = await usecase(
+      UpdateAlertConfigParams(
+        id: config.id,
+        threshold: config.threshold,
+        isEnabled: config.isEnabled,
+      ),
+    );
 
     result.fold(
       (failure) => state = AsyncError<List<AlertConfig>>(
@@ -64,10 +73,7 @@ class AlertNotifier extends AsyncNotifier<List<AlertConfig>> {
     final currentConfigs = state.valueOrNull ?? [];
     state = AsyncData([
       for (final config in currentConfigs)
-        if (config.operatorCode == updatedConfig.operatorCode)
-          updatedConfig
-        else
-          config,
+        if (config.id == updatedConfig.id) updatedConfig else config,
     ]);
   }
 }

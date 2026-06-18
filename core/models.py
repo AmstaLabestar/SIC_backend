@@ -136,6 +136,31 @@ class Puce(models.Model):
         return f"{self.operator} - {self.phone_number} ({self.balance} FCFA)"
 
 
+class AlertConfig(models.Model):
+    """
+    Seuil d'alerte de solde bas, attache a une puce (float reel).
+
+    Cree automatiquement a la creation d'une puce (signal post_save), puis
+    parametrable par l'agent proprietaire. Le seuil garde un compte float
+    precis : 1 puce = 1 alerte (granularite per-puce).
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    puce = models.OneToOneField(
+        Puce, on_delete=models.CASCADE, related_name='alert_config'
+    )
+    threshold = models.DecimalField(max_digits=12, decimal_places=2, default=50000)
+    is_enabled = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        etat = 'on' if self.is_enabled else 'off'
+        return (
+            f"Alerte {self.puce.operator} {self.puce.phone_number} "
+            f"< {self.threshold} ({etat})"
+        )
+
+
 class Transaction(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     agent = models.ForeignKey(Agent, on_delete=models.CASCADE, related_name='transactions')

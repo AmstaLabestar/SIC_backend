@@ -66,7 +66,7 @@ class _AlertConfigTileState extends ConsumerState<AlertConfigTile> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      _draftConfig.operatorName,
+                      '${_draftConfig.operatorName} · ${_draftConfig.phoneNumber}',
                       style: AppTextStyles.titleMedium,
                     ),
                     Text(
@@ -96,8 +96,8 @@ class _AlertConfigTileState extends ConsumerState<AlertConfigTile> {
           const SizedBox(height: AppSpacing.sm),
           Text(
             _draftConfig.isEnabled
-                ? 'Alerte si solde ${_draftConfig.operatorCode} < ${FcfaFormatter.format(_draftConfig.threshold)}'
-                : 'Aucune alerte ne sera envoyee pour ${_draftConfig.operatorCode}',
+                ? 'Alerte si solde ${_draftConfig.phoneNumber} < ${FcfaFormatter.format(_draftConfig.threshold)}'
+                : 'Aucune alerte ne sera envoyee pour ${_draftConfig.phoneNumber}',
             style: AppTextStyles.caption.copyWith(
               color: AppColors.textPrimary,
             ),

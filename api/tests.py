@@ -1227,3 +1227,94 @@ class CompensationWebhookTest(TestCase):
         tx, ok = CompensationEngine.process_webhook('REF_INEXISTANTE', 'SUCCESS')
         self.assertIsNone(tx)
         self.assertFalse(ok)
+
+
+class AlertConfigAPITest(APITestCase):
+    """Seuils d'alerte de solde par puce (modele + signal + endpoints)."""
+
+    def setUp(self):
+        from core.models import AlertConfig
+        self.AlertConfig = AlertConfig
+
+        self.user = User.objects.create_user(
+            username='alertagent', email='alert@example.com',
+            password='Testpass123!'
+        )
+        self.agent = Agent.objects.create(
+            user=self.user, phone_number='+22612000001',
+            first_name='Alert', last_name='Agent', kyc_status='APPROVED'
+        )
+        self.puce = Puce.objects.create(
+            agent=self.agent, operator='ORANGE',
+            phone_number='+22670000001', balance=Decimal('100000.00')
+        )
+        refresh = RefreshToken.for_user(self.user)
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f'Bearer {refresh.access_token}'
+        )
+
+    def test_signal_cree_alerte_par_defaut(self):
+        """Creer une puce cree automatiquement une alerte (seuil 50000, active)."""
+        config = self.AlertConfig.objects.get(puce=self.puce)
+        self.assertEqual(config.threshold, Decimal('50000'))
+        self.assertTrue(config.is_enabled)
+
+    def test_liste_alertes_de_l_agent(self):
+        response = self.client.get('/api/alerts/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['count'], 1)
+        item = response.data['results'][0]
+        self.assertEqual(item['operator'], 'ORANGE')
+        self.assertEqual(item['phone_number'], '+22670000001')
+        self.assertEqual(str(item['puce_id']), str(self.puce.id))
+
+    def test_patch_met_a_jour_seuil_et_activation(self):
+        config = self.AlertConfig.objects.get(puce=self.puce)
+        response = self.client.patch(
+            f'/api/alerts/{config.id}/',
+            {'threshold': '75000', 'is_enabled': False}, format='json'
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        config.refresh_from_db()
+        self.assertEqual(config.threshold, Decimal('75000'))
+        self.assertFalse(config.is_enabled)
+
+    def test_seuil_negatif_refuse(self):
+        config = self.AlertConfig.objects.get(puce=self.puce)
+        response = self.client.patch(
+            f'/api/alerts/{config.id}/',
+            {'threshold': '-100'}, format='json'
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_isolation_entre_agents(self):
+        """Un agent ne voit ni ne modifie l'alerte de la puce d'un autre."""
+        other_user = User.objects.create_user(
+            username='other', email='other@example.com', password='Testpass123!'
+        )
+        other_agent = Agent.objects.create(
+            user=other_user, phone_number='+22612000002',
+            first_name='Other', last_name='Agent', kyc_status='APPROVED'
+        )
+        other_puce = Puce.objects.create(
+            agent=other_agent, operator='MOOV',
+            phone_number='+22670000002', balance=Decimal('10000.00')
+        )
+        other_config = self.AlertConfig.objects.get(puce=other_puce)
+
+        # Liste : ne contient pas la puce de l'autre agent.
+        response = self.client.get('/api/alerts/')
+        ids = [r['id'] for r in response.data['results']]
+        self.assertNotIn(str(other_config.id), ids)
+
+        # PATCH sur l'alerte d'autrui : 404 (hors queryset).
+        response = self.client.patch(
+            f'/api/alerts/{other_config.id}/',
+            {'threshold': '1'}, format='json'
+        )
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_non_authentifie_refuse(self):
+        self.client.credentials()
+        response = self.client.get('/api/alerts/')
+        self.assertIn(response.status_code, (401, 403))

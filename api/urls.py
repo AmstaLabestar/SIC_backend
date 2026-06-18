@@ -8,7 +8,7 @@ from rest_framework_simplejwt.views import (
     TokenVerifyView,
 )
 from .views import (
-    TransactionViewSet, PuceViewSet, AgentProfileView, AccountLimitsView,
+    TransactionViewSet, PuceViewSet, AlertConfigViewSet, AgentProfileView, AccountLimitsView,
     RegisterView, OtpSendView, CommissionInfoView, HealthCheckView,
     CustomTokenObtainPairView, DeviceVerifyView, LogoutView,
     PasswordResetRequestView, PasswordResetConfirmView,
@@ -20,6 +20,7 @@ from .views import (
 router = DefaultRouter()
 router.register(r'transactions', TransactionViewSet, basename='transaction')
 router.register(r'puces', PuceViewSet, basename='puce')
+router.register(r'alerts', AlertConfigViewSet, basename='alert')
 
 urlpatterns = [
     # Authentication

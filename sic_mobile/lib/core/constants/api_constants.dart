@@ -41,6 +41,7 @@ class ApiConstants {
   // Ressources
   static const puces = '/puces/';
   static const transactions = '/transactions/';
+  static const alerts = '/alerts/';
   static const commissions = '/commissions/';
   static const health = '/health/';
 
@@ -54,4 +55,5 @@ class ApiConstants {
   static String puce(String id) => '/puces/$id/';
   static String puceTopup(String id) => '/puces/$id/topup/';
   static String transaction(String id) => '/transactions/$id/';
+  static String alert(String id) => '/alerts/$id/';
 }
