@@ -1318,3 +1318,91 @@ class AlertConfigAPITest(APITestCase):
         self.client.credentials()
         response = self.client.get('/api/alerts/')
         self.assertIn(response.status_code, (401, 403))
+
+
+class SetBalanceAPITest(APITestCase):
+    """Mise à jour manuelle (réconciliation) du solde d'une puce, par l'agent."""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username='balagent', email='bal@example.com', password='Testpass123!'
+        )
+        self.agent = Agent.objects.create(
+            user=self.user, phone_number='+22612000010',
+            first_name='Bal', last_name='Agent', kyc_status='APPROVED'
+        )
+        self.puce = Puce.objects.create(
+            agent=self.agent, operator='ORANGE',
+            phone_number='+22670000010', balance=Decimal('50000.00')
+        )
+        refresh = RefreshToken.for_user(self.user)
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f'Bearer {refresh.access_token}'
+        )
+
+    def _url(self, puce):
+        return f'/api/puces/{puce.id}/set_balance/'
+
+    def test_proprietaire_sans_pin_met_a_jour(self):
+        response = self.client.post(
+            self._url(self.puce), {'balance': '123456.78'}, format='json'
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.puce.refresh_from_db()
+        self.assertEqual(self.puce.balance, Decimal('123456.78'))
+
+    def test_solde_negatif_refuse(self):
+        response = self.client.post(
+            self._url(self.puce), {'balance': '-1'}, format='json'
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.puce.refresh_from_db()
+        self.assertEqual(self.puce.balance, Decimal('50000.00'))
+
+    def test_solde_invalide_refuse(self):
+        response = self.client.post(
+            self._url(self.puce), {'balance': 'abc'}, format='json'
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_pin_configure_sans_token_refuse(self):
+        self.agent.pin_code = 'hashed-pin'
+        self.agent.save(update_fields=['pin_code'])
+        response = self.client.post(
+            self._url(self.puce), {'balance': '60000'}, format='json'
+        )
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.puce.refresh_from_db()
+        self.assertEqual(self.puce.balance, Decimal('50000.00'))
+
+    def test_pin_configure_avec_token_valide(self):
+        from django.core import signing
+        self.agent.pin_code = 'hashed-pin'
+        self.agent.save(update_fields=['pin_code'])
+        token = signing.dumps({'agent_id': str(self.agent.id)}, salt='pin-token')
+        response = self.client.post(
+            self._url(self.puce),
+            {'balance': '60000', 'pin_token': token}, format='json'
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.puce.refresh_from_db()
+        self.assertEqual(self.puce.balance, Decimal('60000.00'))
+
+    def test_non_proprietaire_404(self):
+        other_user = User.objects.create_user(
+            username='intrus', email='intrus@example.com', password='Testpass123!'
+        )
+        other_agent = Agent.objects.create(
+            user=other_user, phone_number='+22612000011',
+            first_name='Intrus', last_name='Agent', kyc_status='APPROVED'
+        )
+        other_puce = Puce.objects.create(
+            agent=other_agent, operator='MOOV',
+            phone_number='+22670000011', balance=Decimal('1000.00')
+        )
+        response = self.client.post(
+            self._url(other_puce), {'balance': '999999'}, format='json'
+        )
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        other_puce.refresh_from_db()
+        self.assertEqual(other_puce.balance, Decimal('1000.00'))

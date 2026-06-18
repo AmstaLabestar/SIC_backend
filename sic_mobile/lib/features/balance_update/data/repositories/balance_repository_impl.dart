@@ -1,45 +1,31 @@
 import 'package:dartz/dartz.dart';
 
-import '../../../../core/errors/exceptions.dart';
 import '../../../../core/errors/failures.dart';
+import '../../../../core/network/dio_failure.dart';
 import '../../domain/entities/balance_update.dart';
 import '../../domain/repositories/balance_repository.dart';
-import '../datasources/balance_local_datasource.dart';
+import '../datasources/balance_remote_datasource.dart';
 
 class BalanceRepositoryImpl implements BalanceRepository {
-  const BalanceRepositoryImpl(this.localDatasource);
+  const BalanceRepositoryImpl(this.remoteDatasource);
 
-  final BalanceLocalDatasource localDatasource;
+  final BalanceRemoteDatasource remoteDatasource;
 
   @override
   Future<Either<Failure, BalanceUpdate>> updateBalance({
-    required String operatorCode,
-    required double previousBalance,
+    required String puceId,
     required double newBalance,
+    required String? pinToken,
   }) async {
     try {
-      final update = await localDatasource.updateBalance(
-        operatorCode: operatorCode,
-        previousBalance: previousBalance,
+      final update = await remoteDatasource.setBalance(
+        puceId: puceId,
         newBalance: newBalance,
+        pinToken: pinToken,
       );
       return Right(update);
-    } on ServerException catch (error) {
-      return Left(ServerFailure(error.message, error.statusCode));
-    } catch (_) {
-      return const Left(ServerFailure('Impossible de mettre a jour le solde.'));
-    }
-  }
-
-  @override
-  Future<Either<Failure, List<BalanceUpdate>>> getBalanceHistory(
-    String operatorCode,
-  ) async {
-    try {
-      final history = await localDatasource.getBalanceHistory(operatorCode);
-      return Right(history);
-    } catch (_) {
-      return const Left(ServerFailure('Impossible de charger l historique.'));
+    } catch (error) {
+      return Left(mapDioErrorToFailure(error));
     }
   }
 }

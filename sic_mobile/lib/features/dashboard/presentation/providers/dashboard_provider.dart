@@ -75,7 +75,7 @@ class DashboardNotifier extends AsyncNotifier<AgentSummary> {
   }
 
   void applyBalanceUpdate({
-    required String operatorCode,
+    required String puceId,
     required double newBalance,
     required DateTime updatedAt,
   }) {
@@ -85,7 +85,7 @@ class DashboardNotifier extends AsyncNotifier<AgentSummary> {
     }
 
     final updatedBalances = currentSummary.balances.map((balance) {
-      if (balance.operatorCode != operatorCode) {
+      if (balance.id != puceId) {
         return balance;
       }
 

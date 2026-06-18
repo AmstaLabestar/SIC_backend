@@ -5,14 +5,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/constants/app_text_styles.dart';
-import '../../../../core/utils/date_formatter.dart';
-import '../../../../core/utils/fcfa_formatter.dart';
 import '../../../../core/utils/validators.dart';
 import '../../../../core/widgets/sic_amount_display.dart';
 import '../../../../core/widgets/sic_button.dart';
 import '../../../dashboard/domain/entities/balance_summary.dart';
 import '../../../dashboard/presentation/providers/dashboard_provider.dart';
-import '../../domain/entities/balance_update.dart';
+import '../../../transactions/presentation/widgets/pin_prompt_sheet.dart';
 import '../../domain/usecases/update_balance.dart';
 import '../providers/balance_update_provider.dart';
 
@@ -49,10 +47,6 @@ class _BalanceUpdateBottomSheetState
 
   @override
   Widget build(BuildContext context) {
-    final historyState = ref.watch(
-      balanceHistoryProvider(widget.balance.operatorCode),
-    );
-
     return Padding(
       padding: EdgeInsets.only(
         left: AppSpacing.md,
@@ -85,8 +79,6 @@ class _BalanceUpdateBottomSheetState
                 validator: Validators.validateAmount,
               ),
               const SizedBox(height: AppSpacing.lg),
-              _HistorySection(historyState: historyState),
-              const SizedBox(height: AppSpacing.lg),
               SicButton(
                 label: 'Confirmer',
                 isLoading: _isSaving,
@@ -104,15 +96,30 @@ class _BalanceUpdateBottomSheetState
       return;
     }
 
+    final puceId = widget.balance.id;
+    if (puceId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Puce non synchronisee avec le serveur.')),
+      );
+      return;
+    }
+
+    // Ecriture sensible : exiger le PIN avant d'ajuster le solde.
+    final pinToken = await PinPromptSheet.show(
+      context,
+      actionLabel: 'la mise a jour du solde',
+    );
+    if (pinToken == null || !mounted) return; // agent a annule.
+
     setState(() => _isSaving = true);
 
     final newBalance = double.parse(_newBalanceController.text);
     final usecase = ref.read(updateBalanceProvider);
     final result = await usecase(
       UpdateBalanceParams(
-        operatorCode: widget.balance.operatorCode,
-        previousBalance: widget.balance.balance,
+        puceId: puceId,
         newBalance: newBalance,
+        pinToken: pinToken,
       ),
     );
 
@@ -131,11 +138,10 @@ class _BalanceUpdateBottomSheetState
       (update) {
         HapticFeedback.mediumImpact();
         ref.read(dashboardNotifierProvider.notifier).applyBalanceUpdate(
-              operatorCode: update.operatorCode,
+              puceId: update.puceId,
               newBalance: update.newBalance,
               updatedAt: update.updatedAt,
             );
-        ref.invalidate(balanceHistoryProvider(widget.balance.operatorCode));
         Navigator.of(context).pop();
       },
     );
@@ -169,69 +175,6 @@ class _CurrentBalancePanel extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-}
-
-class _HistorySection extends StatelessWidget {
-  const _HistorySection({required this.historyState});
-
-  final AsyncValue<List<BalanceUpdate>> historyState;
-
-  @override
-  Widget build(BuildContext context) {
-    return historyState.when(
-      loading: () => const SizedBox(
-        height: 48,
-        child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
-      ),
-      error: (error, stackTrace) => Text(
-        'Historique indisponible',
-        style: AppTextStyles.caption,
-      ),
-      data: (history) {
-        final visibleHistory = history.take(3).toList();
-
-        if (visibleHistory.isEmpty) {
-          return Text(
-            'Aucune mise a jour recente',
-            style: AppTextStyles.caption,
-          );
-        }
-
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Dernieres mises a jour',
-              style: AppTextStyles.titleMedium,
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            ...visibleHistory.map(
-              (update) => Padding(
-                padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        DateFormatter.formatRelative(update.updatedAt),
-                        style: AppTextStyles.caption,
-                      ),
-                    ),
-                    Text(
-                      FcfaFormatter.format(update.newBalance),
-                      style: AppTextStyles.caption.copyWith(
-                        color: AppColors.textPrimary,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        );
-      },
     );
   }
 }

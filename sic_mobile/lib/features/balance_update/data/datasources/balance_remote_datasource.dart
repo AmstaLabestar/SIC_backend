@@ -1,26 +1,26 @@
-// import 'package:dio/dio.dart';
-//
-// import '../models/balance_update_model.dart';
-//
-// TODO: Uncomment and wire this datasource when the Django backend is ready.
-// class BalanceRemoteDatasource {
-//   const BalanceRemoteDatasource(this.dio);
-//
-//   final Dio dio;
-//
-//   Future<BalanceUpdateModel> updateBalance({
-//     required String simId,
-//     required double newBalance,
-//     required DateTime updatedAt,
-//   }) async {
-//     final response = await dio.patch<Map<String, dynamic>>(
-//       '/sims/$simId/balance/',
-//       data: {
-//         'balance': newBalance,
-//         'updated_at': updatedAt.toUtc().toIso8601String(),
-//       },
-//     );
-//
-//     return BalanceUpdateModel.fromJson(response.data!);
-//   }
-// }
+import 'package:dio/dio.dart';
+
+import '../../../../core/constants/api_constants.dart';
+import '../models/balance_update_model.dart';
+
+/// Reconciliation du solde d'une puce via `POST /puces/{id}/set_balance/`.
+class BalanceRemoteDatasource {
+  const BalanceRemoteDatasource(this._dio);
+
+  final Dio _dio;
+
+  Future<BalanceUpdateModel> setBalance({
+    required String puceId,
+    required double newBalance,
+    required String? pinToken,
+  }) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      ApiConstants.puceSetBalance(puceId),
+      data: {'balance': newBalance},
+      options: pinToken == null
+          ? null
+          : Options(headers: {'X-PIN-TOKEN': pinToken}),
+    );
+    return BalanceUpdateModel.fromResponse(puceId, response.data!);
+  }
+}

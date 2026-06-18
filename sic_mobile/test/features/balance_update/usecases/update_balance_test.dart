@@ -6,23 +6,25 @@ import 'package:sic_mobile/features/balance_update/domain/repositories/balance_r
 import 'package:sic_mobile/features/balance_update/domain/usecases/update_balance.dart';
 
 void main() {
-  test('should update balance when repository call is successful', () async {
+  test('UpdateBalance transmet puceId/seuil/pinToken au repo', () async {
     final repository = _FakeBalanceRepository();
     final usecase = UpdateBalance(repository);
 
     final result = await usecase(
       const UpdateBalanceParams(
-        operatorCode: 'OM',
-        previousBalance: 250000,
+        puceId: 'puce-1',
         newBalance: 320000,
+        pinToken: 'token-123',
       ),
     );
 
     expect(result.isRight(), isTrue);
+    expect(repository.lastPuceId, 'puce-1');
     expect(repository.lastNewBalance, 320000);
+    expect(repository.lastPinToken, 'token-123');
   });
 
-  test('should return Failure when repository call fails', () async {
+  test('UpdateBalance propage la Failure', () async {
     final repository = _FakeBalanceRepository(
       failure: const ServerFailure('Server error', 500),
     );
@@ -30,9 +32,9 @@ void main() {
 
     final result = await usecase(
       const UpdateBalanceParams(
-        operatorCode: 'OM',
-        previousBalance: 250000,
+        puceId: 'puce-1',
         newBalance: 320000,
+        pinToken: null,
       ),
     );
 
@@ -46,35 +48,31 @@ class _FakeBalanceRepository implements BalanceRepository {
   _FakeBalanceRepository({this.failure});
 
   final Failure? failure;
+  String? lastPuceId;
   double? lastNewBalance;
+  String? lastPinToken;
 
   @override
   Future<Either<Failure, BalanceUpdate>> updateBalance({
-    required String operatorCode,
-    required double previousBalance,
+    required String puceId,
     required double newBalance,
+    required String? pinToken,
   }) async {
     final failure = this.failure;
     if (failure != null) {
       return Left(failure);
     }
 
+    lastPuceId = puceId;
     lastNewBalance = newBalance;
+    lastPinToken = pinToken;
 
     return Right(
       BalanceUpdate(
-        operatorCode: operatorCode,
-        previousBalance: previousBalance,
+        puceId: puceId,
         newBalance: newBalance,
-        updatedAt: DateTime(2024, 1, 15),
+        updatedAt: DateTime(2026, 1, 15),
       ),
     );
-  }
-
-  @override
-  Future<Either<Failure, List<BalanceUpdate>>> getBalanceHistory(
-    String operatorCode,
-  ) async {
-    return const Right([]);
   }
 }

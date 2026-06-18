@@ -14,24 +14,24 @@ class UpdateBalance implements UseCase<BalanceUpdate, UpdateBalanceParams> {
   @override
   Future<Either<Failure, BalanceUpdate>> call(UpdateBalanceParams params) {
     return repository.updateBalance(
-      operatorCode: params.operatorCode,
-      previousBalance: params.previousBalance,
+      puceId: params.puceId,
       newBalance: params.newBalance,
+      pinToken: params.pinToken,
     );
   }
 }
 
 class UpdateBalanceParams extends Equatable {
   const UpdateBalanceParams({
-    required this.operatorCode,
-    required this.previousBalance,
+    required this.puceId,
     required this.newBalance,
+    required this.pinToken,
   });
 
-  final String operatorCode;
-  final double previousBalance;
+  final String puceId;
   final double newBalance;
+  final String? pinToken;
 
   @override
-  List<Object?> get props => [operatorCode, previousBalance, newBalance];
+  List<Object?> get props => [puceId, newBalance, pinToken];
 }

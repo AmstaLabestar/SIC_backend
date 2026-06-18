@@ -6,7 +6,7 @@ import hmac
 import hashlib
 import os
 import logging
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from django.db import transaction
 from django.utils import timezone
 from datetime import timedelta
@@ -264,6 +264,35 @@ class KycReviewView(generics.GenericAPIView):
         return Response(AgentSerializer(agent).data, status=status.HTTP_200_OK)
 
 
+def verify_pin_token(agent, request):
+    """Garde PIN pour une écriture sensible.
+
+    Si l'agent a configuré un PIN, exige un `X-PIN-TOKEN` (ou `pin_token`)
+    valide, signé et lié à l'agent (max 5 min). Retourne une `Response`
+    d'erreur 401 si absent/invalide/expiré, sinon `None`.
+    """
+    if not agent or not agent.pin_code:
+        return None
+    pin_token = request.data.get('pin_token') or request.headers.get('X-PIN-TOKEN')
+    if not pin_token:
+        return Response({'error': 'PIN verification required.'},
+                        status=status.HTTP_401_UNAUTHORIZED)
+    from django.core import signing
+    from django.core.signing import BadSignature, SignatureExpired
+    try:
+        payload = signing.loads(pin_token, salt='pin-token', max_age=300)
+        if payload.get('agent_id') != str(agent.id):
+            return Response({'error': 'Invalid PIN token.'},
+                            status=status.HTTP_401_UNAUTHORIZED)
+    except SignatureExpired:
+        return Response({'error': 'PIN token expired.'},
+                        status=status.HTTP_401_UNAUTHORIZED)
+    except BadSignature:
+        return Response({'error': 'Invalid PIN token.'},
+                        status=status.HTTP_401_UNAUTHORIZED)
+    return None
+
+
 class PuceViewSet(viewsets.ModelViewSet):
     """
     VueSet pour gérer les puces SIM de l'agent.
@@ -346,6 +375,53 @@ class PuceViewSet(viewsets.ModelViewSet):
         return Response({
             'message': f'Solde rechargé: {amount} FCFA',
             'new_balance': puce.balance
+        })
+
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated])
+    def set_balance(self, request, pk=None):
+        """Agent propriétaire : réconcilier le solde affiché d'une puce avec son
+        float réel (valeur absolue, après une recharge physique chez l'opérateur).
+
+        Écriture sensible → gardée par PIN. `get_object()` est borné aux puces
+        de l'agent (get_queryset) : un non-propriétaire reçoit un 404.
+        """
+        puce = self.get_object()
+        agent = getattr(request.user, 'agent_profile', None)
+
+        pin_error = verify_pin_token(agent, request)
+        if pin_error:
+            return pin_error
+
+        raw = request.data.get('balance')
+        if raw is None:
+            return Response({'error': 'Solde requis'},
+                            status=status.HTTP_400_BAD_REQUEST)
+        try:
+            balance = Decimal(str(raw))
+            if balance < 0:
+                raise ValueError("Le solde doit être positif")
+        except (InvalidOperation, ValueError):
+            return Response({'error': 'Solde invalide'},
+                            status=status.HTTP_400_BAD_REQUEST)
+
+        old_balance = puce.balance
+        puce.balance = balance
+        puce.save(update_fields=['balance', 'updated_at'])
+
+        log_activity(
+            agent=agent,
+            action="PUCE_BALANCE_SET",
+            description=(
+                f"Solde ajusté {puce.operator} {puce.phone_number}: "
+                f"{old_balance} -> {balance} FCFA"
+            ),
+            level="INFO",
+            ip_address=request.META.get('REMOTE_ADDR')
+        )
+
+        return Response({
+            'message': 'Solde mis à jour',
+            'balance': puce.balance
         })
 
 

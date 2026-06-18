@@ -54,6 +54,7 @@ class ApiConstants {
 
   static String puce(String id) => '/puces/$id/';
   static String puceTopup(String id) => '/puces/$id/topup/';
+  static String puceSetBalance(String id) => '/puces/$id/set_balance/';
   static String transaction(String id) => '/transactions/$id/';
   static String alert(String id) => '/alerts/$id/';
 }
