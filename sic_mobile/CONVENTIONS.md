@@ -239,9 +239,9 @@ test/
 │   │   │   └── get_dashboard_summary_test.dart
 │   │   └── repositories/
 │   │       └── dashboard_repository_impl_test.dart
-│   └── sim_management/
+│   └── alerts/
 │       └── usecases/
-│           └── get_sims_test.dart
+│           └── alert_usecases_test.dart
 ```
 
 Nommage des tests :
@@ -250,3 +250,56 @@ test('should return AgentSummary when call is successful', () { ... });
 test('should return ServerFailure when API returns 500', () { ... });
 test('should return CacheFailure when local storage is empty', () { ... });
 ```
+
+---
+
+## 9. Architecture par feature — le « point de bascule unique »
+
+Chaque feature suit la Clean Architecture en trois couches, pour qu'on
+puisse **changer la logique d'un écran ou la source d'une donnée sans
+casser le reste**. La règle d'or : la dépendance va toujours vers le
+**domaine**, jamais l'inverse.
+
+```
+feature/
+├── domain/        ← le contrat, sans Flutter ni Dio ni JSON
+│   ├── entities/        objets métier purs (Equatable)
+│   ├── repositories/    interfaces abstraites (Either<Failure, T>)
+│   └── usecases/        une action = une classe (call(params))
+├── data/          ← l'implémentation, remplaçable
+│   ├── models/          extends entity + fromJson/toJson
+│   ├── datasources/     remote (Dio) et/ou local (Hive)
+│   └── repositories/    implémentent l'interface du domaine
+└── presentation/  ← l'UI
+    ├── providers/       composition + Notifiers Riverpod
+    ├── screens/
+    └── widgets/
+```
+
+### Le point de bascule unique
+
+La **présentation** et le **domaine** ne connaissent QUE l'interface
+abstraite du repository. L'implémentation concrète (remote, cache local,
+mock de test) est choisie à **un seul endroit** : le provider qui
+construit le repository.
+
+```dart
+// presentation/providers/alert_provider.dart
+final alertRepositoryProvider = Provider<AlertRepository>((ref) {
+  return AlertRepositoryImpl(ref.watch(alertRemoteDatasourceProvider));
+  // ← changer la source (remote → cache, → mock) se fait ICI, seul.
+});
+```
+
+Conséquence : pour brancher une feature locale au backend, ou inverser,
+on touche **le provider + la couche data**, jamais le domaine ni l'UI
+(cf. lots `alerts` et `balance_update`). Un test substitue le repository
+via un `override` Riverpod sans rien mocker d'autre.
+
+### Règles
+- Un repository renvoie toujours `Either<Failure, T>`
+  (`mapDioErrorToFailure` pour le remote). Pas d'exception qui fuit.
+- Une donnée a **une seule source de vérité**. Pas de cache local qui
+  duplique silencieusement une donnée serveur (sinon : « split-brain »).
+- Pas de feature « morte » : si un écran/route n'est jamais atteint, on
+  le supprime (cf. retrait de `sim_management`).
