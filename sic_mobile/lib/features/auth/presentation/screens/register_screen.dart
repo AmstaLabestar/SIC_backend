@@ -7,10 +7,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/constants/app_radii.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/constants/app_text_styles.dart';
 import '../../../../core/utils/validators.dart';
+import '../../../../core/widgets/fade_slide_in.dart';
 import '../../../../core/widgets/sic_button.dart';
+import '../../../../core/widgets/sic_logo.dart';
+import '../../../../core/widgets/sic_text_field.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/pin_header.dart';
 import '../widgets/pin_keypad.dart';
@@ -37,7 +41,6 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   final _passwordConfirm = TextEditingController();
   // Type de compte choisi a l'inscription (lot D1). Defaut AGENT.
   bool _isAgent = true;
-  bool _obscure = true;
   bool _submitting = false;
   String? _error;
 
@@ -274,179 +277,232 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   Widget _buildFormPhase() {
     return SafeArea(
       child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+        physics: const BouncingScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(24, 8, 24, 28),
         child: Form(
           key: _formKey,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Rejoignez SIC', style: AppTextStyles.displayLarge),
-              const SizedBox(height: 4),
-              Text(
-                _isAgent
-                    ? 'Compte agent : gerez vos SIM, le float et la compensation.'
-                    : 'Compte client : envoyez et recevez de l\'argent simplement.',
-                style: AppTextStyles.bodyMedium,
+              FadeSlideIn(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SicLogo(size: 60),
+                    const SizedBox(height: AppSpacing.md),
+                    Text('Rejoignez SIC', style: AppTextStyles.displayLarge),
+                    const SizedBox(height: 6),
+                    // Le sous-titre s'adapte au role choisi, en douceur.
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 220),
+                      child: Text(
+                        _isAgent
+                            ? 'Compte agent : gerez vos SIM, le float et la compensation.'
+                            : 'Compte client : envoyez et recevez de l\'argent simplement.',
+                        key: ValueKey(_isAgent),
+                        style: AppTextStyles.bodyMedium,
+                      ),
+                    ),
+                  ],
+                ),
               ),
               const SizedBox(height: AppSpacing.lg),
 
-              _label('Type de compte'),
-              _RoleSelector(
-                isAgent: _isAgent,
-                onChanged: _submitting
-                    ? null
-                    : (v) => setState(() => _isAgent = v),
-              ),
-              const SizedBox(height: AppSpacing.md),
-
-              _label('Identifiant'),
-              TextFormField(
-                controller: _username,
-                textInputAction: TextInputAction.next,
-                decoration: const InputDecoration(hintText: 'nom_utilisateur'),
-                validator: _validateUsername,
-              ),
-              const SizedBox(height: AppSpacing.md),
-
-              _label('Email'),
-              TextFormField(
-                controller: _email,
-                keyboardType: TextInputType.emailAddress,
-                textInputAction: TextInputAction.next,
-                decoration: const InputDecoration(hintText: 'agent@exemple.com'),
-                validator: _validateEmail,
-              ),
-              const SizedBox(height: AppSpacing.md),
-
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _label('Prenom'),
-                        TextFormField(
-                          controller: _firstName,
-                          textInputAction: TextInputAction.next,
-                          decoration: const InputDecoration(hintText: 'Moussa'),
-                        ),
-                      ],
+              FadeSlideIn(
+                delay: const Duration(milliseconds: 70),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _label('Type de compte'),
+                    _RoleSelector(
+                      isAgent: _isAgent,
+                      onChanged: _submitting
+                          ? null
+                          : (v) => setState(() => _isAgent = v),
                     ),
-                  ),
-                  const SizedBox(width: AppSpacing.md),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _label('Nom'),
-                        TextFormField(
-                          controller: _lastName,
-                          textInputAction: TextInputAction.next,
-                          decoration: const InputDecoration(hintText: 'Kone'),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
               const SizedBox(height: AppSpacing.md),
 
-              _label('Numero de telephone'),
-              TextFormField(
-                controller: _phone,
-                keyboardType: TextInputType.phone,
-                textInputAction: TextInputAction.next,
-                inputFormatters: [
-                  FilteringTextInputFormatter.digitsOnly,
-                  LengthLimitingTextInputFormatter(10),
-                ],
-                decoration: InputDecoration(
-                  hintText: '70123456',
+              FadeSlideIn(
+                delay: const Duration(milliseconds: 130),
+                child: SicTextField(
+                  label: 'Identifiant',
+                  controller: _username,
+                  icon: Icons.alternate_email_rounded,
+                  hint: 'nom_utilisateur',
+                  textInputAction: TextInputAction.next,
+                  validator: _validateUsername,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+
+              FadeSlideIn(
+                delay: const Duration(milliseconds: 180),
+                child: SicTextField(
+                  label: 'Email',
+                  controller: _email,
+                  icon: Icons.mail_outline_rounded,
+                  hint: 'agent@exemple.com',
+                  keyboardType: TextInputType.emailAddress,
+                  textInputAction: TextInputAction.next,
+                  validator: _validateEmail,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+
+              FadeSlideIn(
+                delay: const Duration(milliseconds: 220),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: SicTextField(
+                        label: 'Prenom',
+                        controller: _firstName,
+                        hint: 'Moussa',
+                        textInputAction: TextInputAction.next,
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.md),
+                    Expanded(
+                      child: SicTextField(
+                        label: 'Nom',
+                        controller: _lastName,
+                        hint: 'Kone',
+                        textInputAction: TextInputAction.next,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+
+              FadeSlideIn(
+                delay: const Duration(milliseconds: 260),
+                child: SicTextField(
+                  label: 'Numero de telephone',
+                  controller: _phone,
+                  icon: Icons.phone_iphone_rounded,
+                  hint: '70123456',
+                  keyboardType: TextInputType.phone,
+                  textInputAction: TextInputAction.next,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                    LengthLimitingTextInputFormatter(10),
+                  ],
                   helperText: _isAgent
                       ? 'Ce numero deviendra votre premiere SIM.'
                       : 'Numero utilise pour vos transferts.',
+                  validator: Validators.validateAnyPhone,
                 ),
-                validator: Validators.validateAnyPhone,
+              ),
+
+              // Le champ code marchand apparait/disparait en douceur selon le
+              // role (visible pour un agent uniquement).
+              AnimatedSize(
+                duration: const Duration(milliseconds: 240),
+                curve: Curves.easeOut,
+                alignment: Alignment.topCenter,
+                child: _isAgent
+                    ? Padding(
+                        padding: const EdgeInsets.only(top: AppSpacing.md),
+                        child: SicTextField(
+                          label: 'Code marchand',
+                          controller: _merchantCode,
+                          icon: Icons.store_rounded,
+                          hint: '8170275',
+                          textInputAction: TextInputAction.next,
+                          helperText:
+                              'Votre numero de caisse operateur (valide ensuite par SIC).',
+                          validator: (v) {
+                            if (!_isAgent) return null;
+                            if ((v ?? '').trim().isEmpty) {
+                              return 'Code marchand requis pour un agent.';
+                            }
+                            return null;
+                          },
+                        ),
+                      )
+                    : const SizedBox(width: double.infinity),
               ),
               const SizedBox(height: AppSpacing.md),
 
-              if (_isAgent) ...[
-                _label('Code marchand'),
-                TextFormField(
-                  controller: _merchantCode,
-                  keyboardType: TextInputType.text,
-                  textInputAction: TextInputAction.next,
-                  decoration: const InputDecoration(
-                    hintText: '8170275',
-                    helperText:
-                        'Votre numero de caisse operateur (valide ensuite par SIC).',
-                  ),
-                  validator: (v) {
-                    if (!_isAgent) return null;
-                    if ((v ?? '').trim().isEmpty) {
-                      return 'Code marchand requis pour un agent.';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: AppSpacing.md),
-              ],
-
-              _label('Mot de passe'),
-              TextFormField(
-                controller: _password,
-                obscureText: _obscure,
-                textInputAction: TextInputAction.next,
-                decoration: InputDecoration(
-                  hintText: '••••••••',
-                  suffixIcon: IconButton(
-                    onPressed: () => setState(() => _obscure = !_obscure),
-                    icon: Icon(
-                      _obscure
-                          ? Icons.visibility_outlined
-                          : Icons.visibility_off_outlined,
+              FadeSlideIn(
+                delay: const Duration(milliseconds: 300),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SicTextField(
+                      label: 'Mot de passe',
+                      controller: _password,
+                      icon: Icons.lock_outline_rounded,
+                      hint: '••••••••',
+                      isPassword: true,
+                      textInputAction: TextInputAction.next,
+                      validator: _validatePassword,
                     ),
-                  ),
+                    _PasswordStrengthBar(listenable: _password),
+                    const SizedBox(height: AppSpacing.md),
+                    SicTextField(
+                      label: 'Confirmer le mot de passe',
+                      controller: _passwordConfirm,
+                      icon: Icons.lock_outline_rounded,
+                      hint: '••••••••',
+                      isPassword: true,
+                      textInputAction: TextInputAction.done,
+                      onSubmitted: (_) => _continue(),
+                      validator: (v) => (v != _password.text)
+                          ? 'Les mots de passe ne correspondent pas.'
+                          : null,
+                    ),
+                  ],
                 ),
-                validator: _validatePassword,
-              ),
-              const SizedBox(height: AppSpacing.md),
-
-              _label('Confirmer le mot de passe'),
-              TextFormField(
-                controller: _passwordConfirm,
-                obscureText: _obscure,
-                textInputAction: TextInputAction.done,
-                onFieldSubmitted: (_) => _continue(),
-                decoration: const InputDecoration(hintText: '••••••••'),
-                validator: (v) => (v != _password.text)
-                    ? 'Les mots de passe ne correspondent pas.'
-                    : null,
               ),
 
-              if (_error != null) ...[
-                const SizedBox(height: AppSpacing.md),
-                _ErrorBanner(message: _error!),
-              ],
+              AnimatedSize(
+                duration: const Duration(milliseconds: 220),
+                curve: Curves.easeOut,
+                alignment: Alignment.topCenter,
+                child: _error == null
+                    ? const SizedBox(width: double.infinity)
+                    : Padding(
+                        padding: const EdgeInsets.only(top: AppSpacing.md),
+                        child: _ErrorBanner(message: _error!),
+                      ),
+              ),
               const SizedBox(height: AppSpacing.xl),
 
-              SicButton(
-                label: 'Continuer',
-                isLoading: _submitting,
-                onPressed: _continue,
-              ),
-              const SizedBox(height: AppSpacing.md),
-              Center(
-                child: TextButton(
-                  onPressed: () => context.go('/login'),
-                  child: Text(
-                    'J\'ai deja un compte — Se connecter',
-                    style: AppTextStyles.caption.copyWith(
-                      color: AppColors.primary,
-                      fontWeight: FontWeight.w600,
+              FadeSlideIn(
+                delay: const Duration(milliseconds: 340),
+                child: Column(
+                  children: [
+                    SicButton(
+                      label: 'Continuer',
+                      isLoading: _submitting,
+                      onPressed: _continue,
                     ),
-                  ),
+                    const SizedBox(height: AppSpacing.sm),
+                    TextButton(
+                      onPressed: () => context.go('/login'),
+                      child: Text.rich(
+                        TextSpan(
+                          text: 'J\'ai deja un compte ?  ',
+                          style: AppTextStyles.caption,
+                          children: [
+                            TextSpan(
+                              text: 'Se connecter',
+                              style: AppTextStyles.caption.copyWith(
+                                color: AppColors.primary,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -543,7 +599,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   }
 }
 
-/// Selecteur segmente Agent / Client (lot D1).
+/// Selecteur segmente Agent / Client (lot D1) avec un pouce qui glisse sous
+/// l'option active (AnimatedAlign) pour une transition fluide et premium.
 class _RoleSelector extends StatelessWidget {
   const _RoleSelector({required this.isAgent, required this.onChanged});
 
@@ -556,24 +613,55 @@ class _RoleSelector extends StatelessWidget {
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(AppRadii.sm),
         border: Border.all(color: AppColors.border),
       ),
-      child: Row(
-        children: [
-          _option(
-            label: 'Agent',
-            icon: Icons.store_rounded,
-            selected: isAgent,
-            onTap: onChanged == null ? null : () => onChanged!(true),
-          ),
-          _option(
-            label: 'Client',
-            icon: Icons.person_rounded,
-            selected: !isAgent,
-            onTap: onChanged == null ? null : () => onChanged!(false),
-          ),
-        ],
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final thumbWidth = (constraints.maxWidth - 8) / 2;
+          return Stack(
+            children: [
+              // Pouce coulissant derriere les libelles.
+              AnimatedAlign(
+                duration: const Duration(milliseconds: 220),
+                curve: Curves.easeOutCubic,
+                alignment:
+                    isAgent ? Alignment.centerLeft : Alignment.centerRight,
+                child: Container(
+                  width: thumbWidth,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: AppColors.primary,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.primary.withValues(alpha: 0.22),
+                        blurRadius: 12,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              Row(
+                children: [
+                  _option(
+                    label: 'Agent',
+                    icon: Icons.store_rounded,
+                    selected: isAgent,
+                    onTap: onChanged == null ? null : () => onChanged!(true),
+                  ),
+                  _option(
+                    label: 'Client',
+                    icon: Icons.person_rounded,
+                    selected: !isAgent,
+                    onTap: onChanged == null ? null : () => onChanged!(false),
+                  ),
+                ],
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -588,32 +676,110 @@ class _RoleSelector extends StatelessWidget {
       child: GestureDetector(
         onTap: onTap,
         behavior: HitTestBehavior.opaque,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          decoration: BoxDecoration(
-            color: selected ? AppColors.primary : Colors.transparent,
-            borderRadius: BorderRadius.circular(10),
-          ),
+        child: SizedBox(
+          height: 44,
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon,
+              AnimatedScale(
+                duration: const Duration(milliseconds: 200),
+                scale: selected ? 1.0 : 0.92,
+                child: Icon(
+                  icon,
                   size: 18,
-                  color: selected ? AppColors.onPrimary : AppColors.textSecondary),
+                  color:
+                      selected ? AppColors.onPrimary : AppColors.textSecondary,
+                ),
+              ),
               const SizedBox(width: 8),
-              Text(
-                label,
+              AnimatedDefaultTextStyle(
+                duration: const Duration(milliseconds: 200),
                 style: AppTextStyles.bodyMedium.copyWith(
                   color:
                       selected ? AppColors.onPrimary : AppColors.textSecondary,
                   fontWeight: FontWeight.w700,
                 ),
+                child: Text(label),
               ),
             ],
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Indicateur de force du mot de passe : 4 segments qui se remplissent au fur
+/// et a mesure de la saisie, avec une couleur qui passe du rouge au vert. Se
+/// reconstruit en ecoutant le controleur du champ.
+class _PasswordStrengthBar extends StatelessWidget {
+  const _PasswordStrengthBar({required this.listenable});
+
+  final TextEditingController listenable;
+
+  /// Score 0..4 selon longueur et variete de caracteres.
+  int _score(String v) {
+    if (v.isEmpty) return 0;
+    var score = 0;
+    if (v.length >= 8) score++;
+    if (v.length >= 12) score++;
+    if (RegExp(r'[A-Z]').hasMatch(v) && RegExp(r'[a-z]').hasMatch(v)) score++;
+    if (RegExp(r'[0-9]').hasMatch(v) && RegExp(r'[^A-Za-z0-9]').hasMatch(v)) {
+      score++;
+    }
+    return score.clamp(0, 4);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: listenable,
+      builder: (context, _) {
+        final value = listenable.text;
+        if (value.isEmpty) {
+          return const SizedBox(height: AppSpacing.sm);
+        }
+        final score = _score(value);
+        const labels = ['Faible', 'Faible', 'Moyen', 'Bon', 'Excellent'];
+        final colors = [
+          AppColors.danger,
+          AppColors.danger,
+          AppColors.warning,
+          AppColors.success,
+          AppColors.success,
+        ];
+        final color = colors[score];
+        return Padding(
+          padding: const EdgeInsets.only(top: AppSpacing.sm),
+          child: Row(
+            children: [
+              for (var i = 0; i < 4; i++) ...[
+                Expanded(
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 240),
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: i < score
+                          ? color
+                          : AppColors.border,
+                      borderRadius: BorderRadius.circular(AppRadii.pill),
+                    ),
+                  ),
+                ),
+                if (i < 3) const SizedBox(width: 6),
+              ],
+              const SizedBox(width: AppSpacing.sm),
+              Text(
+                labels[score],
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: color,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

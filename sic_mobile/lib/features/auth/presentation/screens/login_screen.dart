@@ -6,7 +6,10 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/constants/app_text_styles.dart';
+import '../../../../core/widgets/fade_slide_in.dart';
 import '../../../../core/widgets/sic_button.dart';
+import '../../../../core/widgets/sic_logo.dart';
+import '../../../../core/widgets/sic_text_field.dart';
 import '../providers/auth_provider.dart';
 import '../providers/biometric_provider.dart';
 
@@ -21,7 +24,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _identifierController = TextEditingController();
   final _passwordController = TextEditingController();
-  bool _obscure = true;
   bool _submitting = false;
   String? _error;
   bool _biometricReady = false;
@@ -104,129 +106,170 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       backgroundColor: AppColors.background,
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(24, 40, 24, 24),
+          physics: const BouncingScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(24, 48, 24, 24),
           child: Form(
             key: _formKey,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  height: 64,
-                  width: 64,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(20),
-                    gradient: const LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [AppColors.primary, AppColors.secondary],
-                    ),
+                FadeSlideIn(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SicLogo(size: 76),
+                      const SizedBox(height: AppSpacing.lg),
+                      Text('Bienvenue', style: AppTextStyles.displayLarge),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Connectez-vous a votre espace SIC.',
+                        style: AppTextStyles.bodyMedium,
+                      ),
+                    ],
                   ),
-                  child: Text(
-                    'SIC',
-                    style: AppTextStyles.titleLarge.copyWith(
-                      color: AppColors.onPrimary,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.lg),
-                Text('Bienvenue', style: AppTextStyles.displayLarge),
-                const SizedBox(height: 4),
-                Text(
-                  'Connectez-vous a votre espace agent.',
-                  style: AppTextStyles.bodyMedium,
                 ),
                 const SizedBox(height: AppSpacing.xl),
-                Text('Numero de telephone', style: AppTextStyles.microLabel),
-                const SizedBox(height: AppSpacing.sm),
-                TextFormField(
-                  controller: _identifierController,
-                  textInputAction: TextInputAction.next,
-                  keyboardType: TextInputType.phone,
-                  autofillHints: const [AutofillHints.telephoneNumber],
-                  decoration: const InputDecoration(hintText: '70 12 34 56'),
-                  validator: (v) => (v == null || v.trim().isEmpty)
-                      ? 'Numero de telephone requis'
-                      : null,
+                FadeSlideIn(
+                  delay: const Duration(milliseconds: 80),
+                  child: SicTextField(
+                    label: 'Numero de telephone',
+                    controller: _identifierController,
+                    icon: Icons.phone_iphone_rounded,
+                    hint: '70 12 34 56',
+                    keyboardType: TextInputType.phone,
+                    textInputAction: TextInputAction.next,
+                    autofillHints: const [AutofillHints.telephoneNumber],
+                    validator: (v) => (v == null || v.trim().isEmpty)
+                        ? 'Numero de telephone requis'
+                        : null,
+                  ),
                 ),
                 const SizedBox(height: AppSpacing.md),
-                Text('Mot de passe', style: AppTextStyles.microLabel),
-                const SizedBox(height: AppSpacing.sm),
-                TextFormField(
-                  controller: _passwordController,
-                  obscureText: _obscure,
-                  textInputAction: TextInputAction.done,
-                  autofillHints: const [AutofillHints.password],
-                  onFieldSubmitted: (_) => _submit(),
-                  decoration: InputDecoration(
-                    hintText: '••••••••',
-                    suffixIcon: IconButton(
-                      onPressed: () => setState(() => _obscure = !_obscure),
-                      icon: Icon(
-                        _obscure
-                            ? Icons.visibility_outlined
-                            : Icons.visibility_off_outlined,
-                      ),
-                    ),
+                FadeSlideIn(
+                  delay: const Duration(milliseconds: 150),
+                  child: SicTextField(
+                    label: 'Mot de passe',
+                    controller: _passwordController,
+                    icon: Icons.lock_outline_rounded,
+                    hint: '••••••••',
+                    isPassword: true,
+                    textInputAction: TextInputAction.done,
+                    autofillHints: const [AutofillHints.password],
+                    onSubmitted: (_) => _submit(),
+                    validator: (v) =>
+                        (v == null || v.isEmpty) ? 'Mot de passe requis' : null,
                   ),
-                  validator: (v) =>
-                      (v == null || v.isEmpty) ? 'Mot de passe requis' : null,
                 ),
-                if (_error != null) ...[
-                  const SizedBox(height: AppSpacing.md),
-                  _ErrorBanner(message: _error!),
-                ],
+                AnimatedSize(
+                  duration: const Duration(milliseconds: 220),
+                  curve: Curves.easeOut,
+                  alignment: Alignment.topCenter,
+                  child: _error == null
+                      ? const SizedBox(width: double.infinity)
+                      : Padding(
+                          padding: const EdgeInsets.only(top: AppSpacing.md),
+                          child: _ErrorBanner(message: _error!),
+                        ),
+                ),
                 const SizedBox(height: AppSpacing.xl),
-                SicButton(
-                  label: 'Se connecter',
-                  isLoading: _submitting,
-                  onPressed: _submit,
-                ),
-                if (_biometricReady) ...[
-                  const SizedBox(height: AppSpacing.md),
-                  Center(
-                    child: TextButton.icon(
-                      onPressed: _submitting ? null : _loginWithBiometric,
-                      icon: const Icon(Icons.fingerprint_rounded, size: 24),
-                      label: Text(
-                        'Se connecter avec l\'empreinte',
-                        style: AppTextStyles.bodyMedium.copyWith(
-                          color: AppColors.primary,
-                          fontWeight: FontWeight.w600,
+                FadeSlideIn(
+                  delay: const Duration(milliseconds: 220),
+                  child: Column(
+                    children: [
+                      SicButton(
+                        label: 'Se connecter',
+                        isLoading: _submitting,
+                        onPressed: _submit,
+                      ),
+                      if (_biometricReady) ...[
+                        const SizedBox(height: AppSpacing.md),
+                        _BiometricButton(
+                          onPressed:
+                              _submitting ? null : _loginWithBiometric,
+                        ),
+                      ],
+                      const SizedBox(height: AppSpacing.sm),
+                      TextButton(
+                        onPressed: () => context.go('/forgot-password'),
+                        child: Text(
+                          'Mot de passe oublie ?',
+                          style: AppTextStyles.caption.copyWith(
+                            color: AppColors.textSecondary,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
-                    ),
-                  ),
-                ],
-                const SizedBox(height: AppSpacing.sm),
-                Center(
-                  child: TextButton(
-                    onPressed: () => context.go('/forgot-password'),
-                    child: Text(
-                      'Mot de passe oublie ?',
-                      style: AppTextStyles.caption.copyWith(
-                        color: AppColors.textSecondary,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ),
-                Center(
-                  child: TextButton(
-                    onPressed: () => context.go('/register'),
-                    child: Text(
-                      'Pas encore de compte ? Creer un compte',
-                      style: AppTextStyles.caption.copyWith(
-                        color: AppColors.primary,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+                      const SizedBox(height: AppSpacing.xs),
+                      _SignupPrompt(onTap: () => context.go('/register')),
+                    ],
                   ),
                 ),
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Bouton biometrie discret mais tactile (surface + bord, retour au tap).
+class _BiometricButton extends StatelessWidget {
+  const _BiometricButton({required this.onPressed});
+
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        onPressed: onPressed,
+        style: OutlinedButton.styleFrom(
+          minimumSize: const Size.fromHeight(52),
+          foregroundColor: AppColors.primary,
+          backgroundColor: AppColors.surface,
+          side: const BorderSide(color: AppColors.border),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+        icon: const Icon(Icons.fingerprint_rounded, size: 22),
+        label: Text(
+          'Se connecter avec l\'empreinte',
+          style: AppTextStyles.bodyMedium.copyWith(
+            color: AppColors.primary,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Invitation a creer un compte (texte secondaire + accent cliquable).
+class _SignupPrompt extends StatelessWidget {
+  const _SignupPrompt({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextButton(
+      onPressed: onTap,
+      child: Text.rich(
+        TextSpan(
+          text: 'Pas encore de compte ?  ',
+          style: AppTextStyles.caption,
+          children: [
+            TextSpan(
+              text: 'Creer un compte',
+              style: AppTextStyles.caption.copyWith(
+                color: AppColors.primary,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
         ),
       ),
     );

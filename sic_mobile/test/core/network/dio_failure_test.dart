@@ -47,5 +47,22 @@ void main() {
     test('500 -> ServerFailure', () {
       expect(mapDioErrorToFailure(_http(500)), isA<ServerFailure>());
     });
+
+    test('500 avec page HTML -> message generique, jamais le corps brut', () {
+      const html = '<!DOCTYPE html><html><body>Traceback (most recent call '
+          'last): File "/app/api/views.py" ...</body></html>';
+      final failure = mapDioErrorToFailure(_http(500, html));
+      expect(failure, isA<ServerFailure>());
+      expect(failure.message, isNot(contains('<')));
+      expect(failure.message, isNot(contains('Traceback')));
+    });
+
+    test('400 avec corps String (HTML) -> message generique, pas de fuite', () {
+      const html = '<html><body>SECRET STACKTRACE /app/secret.py</body></html>';
+      final failure = mapDioErrorToFailure(_http(400, html));
+      expect(failure, isA<ValidationFailure>());
+      expect(failure.message, isNot(contains('SECRET')));
+      expect(failure.message, isNot(contains('<')));
+    });
   });
 }
