@@ -69,6 +69,12 @@ jobs:
           channel: stable
           cache: true
 
+      - name: Preparer le fichier .env (asset declare dans pubspec)
+        # .env est gitignore (secrets) mais declare comme asset : sans lui
+        # `flutter analyze` echoue (asset_does_not_exist). On le derive du
+        # template versionne .env.example.
+        run: cp .env.example .env
+
       - name: Recuperer les dependances
         run: flutter pub get
 
@@ -101,6 +107,9 @@ jobs:
         with:
           channel: stable
           cache: true
+
+      - name: Preparer le fichier .env (asset declare dans pubspec)
+        run: cp .env.example .env
 
       - name: Recuperer les dependances
         run: flutter pub get
