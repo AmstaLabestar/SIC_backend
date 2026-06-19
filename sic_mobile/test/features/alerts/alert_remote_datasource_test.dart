@@ -34,7 +34,9 @@ void main() {
           'operator': 'ORANGE',
           'phone_number': '+22670000001',
           'balance': '100000.00',
-          'threshold': 50000,
+          // Le backend DRF serialise les Decimal en String : le mapping doit
+          // le supporter (regression : un cast `as num` plantait avant).
+          'threshold': '50000.00',
           'is_enabled': true,
           'updated_at': '2026-06-18T10:00:00Z',
         }
@@ -59,7 +61,7 @@ void main() {
       'operator': 'MOOV',
       'phone_number': '+22670000002',
       'balance': '0.00',
-      'threshold': 75000,
+      'threshold': '75000.00',
       'is_enabled': false,
       'updated_at': '2026-06-18T11:00:00Z',
     }));

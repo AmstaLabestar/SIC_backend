@@ -13,12 +13,19 @@ import '../widgets/pin_keypad.dart';
 
 enum _Phase { enterPin, confirmPin, password }
 
-/// Ecran obligatoire de creation du code PIN (apres login si `has_pin=false`).
+/// Ecran de creation OU de modification du code PIN.
 ///
 /// Trois etapes : saisie du PIN (4-6 chiffres), confirmation, puis mot de passe
 /// du compte (exige par le backend pour securiser l'operation).
+///
+/// - Mode creation (`isChange == false`, defaut) : ecran obligatoire apres login
+///   si `has_pin == false` ; pas de sortie, la garde de route redirige au succes.
+/// - Mode modification (`isChange == true`, depuis Securite) : on peut sortir,
+///   et au succes on revient en arriere avec une confirmation.
 class PinSetupScreen extends ConsumerStatefulWidget {
-  const PinSetupScreen({super.key});
+  const PinSetupScreen({super.key, this.isChange = false});
+
+  final bool isChange;
 
   @override
   ConsumerState<PinSetupScreen> createState() => _PinSetupScreenState();
@@ -139,14 +146,30 @@ class _PinSetupScreenState extends ConsumerState<PinSetupScreen> {
       _submitting = false;
       _error = error;
     });
-    // Succes : le claim hasPin passe a true -> la garde de route redirige
+    if (error != null) return;
+
+    if (widget.isChange) {
+      // Modification depuis Securite : on revient en arriere avec un retour.
+      HapticFeedback.mediumImpact();
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            behavior: SnackBarBehavior.floating,
+            content: Text('Code PIN mis a jour.'),
+          ),
+        );
+      Navigator.of(context).pop();
+    }
+    // Mode creation : le claim hasPin passe a true -> la garde de route redirige
     // automatiquement vers /dashboard.
   }
 
   void _onBack() {
     switch (_phase) {
       case _Phase.enterPin:
-        break; // etape initiale obligatoire : pas de sortie.
+        // Mode modification : on peut quitter l'ecran. Mode creation : obligatoire.
+        if (widget.isChange) Navigator.of(context).maybePop();
       case _Phase.confirmPin:
         setState(() {
           _phase = _Phase.enterPin;
@@ -163,31 +186,37 @@ class _PinSetupScreenState extends ConsumerState<PinSetupScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final canGoBack = _phase != _Phase.enterPin;
+    final canStepBack = _phase != _Phase.enterPin;
+    // En mode modification, on peut aussi sortir depuis la 1re etape.
+    final showBack = canStepBack || widget.isChange;
     return PopScope(
-      // Ecran obligatoire : on bloque la sortie ; le retour ne fait que revenir
-      // a l'etape precedente.
-      canPop: false,
+      // Modification : sortie autorisee a la 1re etape. Creation : jamais.
+      // Aux etapes suivantes, le retour ne fait que revenir a l'etape precedente.
+      canPop: widget.isChange && _phase == _Phase.enterPin,
       onPopInvokedWithResult: (didPop, _) {
-        if (!didPop && canGoBack) _onBack();
+        if (!didPop && canStepBack) _onBack();
       },
       child: Scaffold(
         backgroundColor: AppColors.surface,
-        body: _phase == _Phase.password ? _passwordStep() : _pinStep(canGoBack),
+        body: _phase == _Phase.password ? _passwordStep() : _pinStep(showBack),
       ),
     );
   }
 
   // --- Etapes PIN (saisie / confirmation) ---
-  Widget _pinStep(bool canGoBack) {
+  Widget _pinStep(bool showBack) {
     final isConfirm = _phase == _Phase.confirmPin;
     return Column(
       children: [
         PinGradientHeader(
-          showBack: canGoBack,
+          showBack: showBack,
           onBack: _onBack,
           icon: isConfirm ? Icons.lock_outline_rounded : Icons.pin_outlined,
-          title: isConfirm ? 'Confirmez votre code' : 'Creez votre code PIN',
+          title: isConfirm
+              ? 'Confirmez votre code'
+              : widget.isChange
+                  ? 'Nouveau code PIN'
+                  : 'Creez votre code PIN',
           subtitle: _weakPin != null
               ? _weakPin!
               : _mismatch
@@ -263,7 +292,9 @@ class _PinSetupScreenState extends ConsumerState<PinSetupScreen> {
                   ],
                   const SizedBox(height: AppSpacing.xl),
                   SicButton(
-                    label: 'Activer mon code PIN',
+                    label: widget.isChange
+                        ? 'Mettre a jour le code'
+                        : 'Activer mon code PIN',
                     isLoading: _submitting,
                     onPressed: _submitPassword,
                   ),

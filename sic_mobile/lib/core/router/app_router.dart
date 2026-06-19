@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../features/account/presentation/screens/account_screen.dart';
+import '../../features/account/presentation/screens/security_screen.dart';
 import '../../features/alerts/presentation/screens/alerts_screen.dart';
 import '../../features/auth/presentation/providers/app_lock_provider.dart';
 import '../../features/auth/presentation/providers/auth_provider.dart';
@@ -134,6 +135,28 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/operations/transfert',
         builder: (context, state) => const TransferScreen(),
       ),
+      // Ecrans de detail (atteints via push depuis l'accueil/le compte) : plein
+      // ecran avec retour, hors barre de navigation.
+      GoRoute(
+        path: '/dashboard/stats',
+        builder: (context, state) => const StatsScreen(),
+      ),
+      GoRoute(
+        path: '/dashboard/alerts',
+        builder: (context, state) => const AlertsScreen(),
+      ),
+      GoRoute(
+        path: '/dashboard/settings',
+        builder: (context, state) => const SettingsScreen(),
+      ),
+      GoRoute(
+        path: '/securite',
+        builder: (context, state) => const SecurityScreen(),
+      ),
+      GoRoute(
+        path: '/securite/changer-pin',
+        builder: (context, state) => const PinSetupScreen(isChange: true),
+      ),
       ShellRoute(
         builder: (context, state, child) => AppShell(child: child),
         routes: [
@@ -155,18 +178,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/compte',
             builder: (context, state) => const AccountScreen(),
-          ),
-          GoRoute(
-            path: '/dashboard/stats',
-            builder: (context, state) => const StatsScreen(),
-          ),
-          GoRoute(
-            path: '/dashboard/alerts',
-            builder: (context, state) => const AlertsScreen(),
-          ),
-          GoRoute(
-            path: '/dashboard/settings',
-            builder: (context, state) => const SettingsScreen(),
           ),
         ],
       ),

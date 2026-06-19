@@ -27,9 +27,17 @@ class AlertConfigModel extends AlertConfig {
       operatorName: operator.name,
       phoneNumber: (json['phone_number'] as String?) ?? '',
       isEnabled: (json['is_enabled'] as bool?) ?? true,
-      threshold: (json['threshold'] as num).toDouble(),
+      // Le backend (DRF DecimalField) serialise les montants en String
+      // ("50000.00") : on parse de maniere robuste (num OU String).
+      threshold: _toDouble(json['threshold']),
       lastUpdated: DateTime.parse(json['updated_at'] as String).toLocal(),
     );
+  }
+
+  /// Parse un montant qu'il arrive en num (10000) ou en String ("10000.00").
+  static double _toDouble(Object? value) {
+    if (value is num) return value.toDouble();
+    return double.tryParse(value?.toString() ?? '') ?? 0;
   }
 
   /// Corps du PATCH `/alerts/{id}/` : seuls les champs modifiables.

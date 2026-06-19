@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/preferences/privacy_provider.dart';
 import '../../../../core/network/network_providers.dart';
 import '../../../../core/usecases/usecase.dart';
 import '../../data/datasources/dashboard_remote_datasource.dart';
@@ -31,12 +32,15 @@ final selectedPeriodProvider = StateProvider<DashboardPeriod>(
   (ref) => DashboardPeriod.today,
 );
 
-/// Visibilite du solde total de la hero card (defaut: visible).
-final heroBalanceVisibleProvider = StateProvider<bool>((ref) => true);
+/// Visibilite du solde total de la hero card. Defaut pilote par la preference
+/// de confidentialite (masquer les soldes) ; l'oeil reste un override de session.
+final heroBalanceVisibleProvider = StateProvider<bool>(
+  (ref) => !ref.watch(hideBalancesProvider),
+);
 
-/// Visibilite du solde d'une SIM, par operatorCode (defaut: visible).
+/// Visibilite du solde d'une SIM, par operatorCode. Meme defaut que la hero.
 final simVisibilityProvider = StateProvider.family<bool, String>(
-  (ref, operatorCode) => true,
+  (ref, operatorCode) => !ref.watch(hideBalancesProvider),
 );
 
 /// Page active du carousel de bannieres.

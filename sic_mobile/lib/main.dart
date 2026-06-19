@@ -5,6 +5,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 
 import 'core/app_globals.dart';
 import 'core/constants/app_theme.dart';
+import 'core/preferences/privacy_provider.dart';
 import 'core/router/app_router.dart';
 import 'features/auth/presentation/providers/app_lock_provider.dart';
 
@@ -12,6 +13,8 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(isOptional: true);
   await Hive.initFlutter();
+  // Preferences applicatives locales (confidentialite des soldes, etc.).
+  await Hive.openBox(appPrefsBox);
 
   runApp(const ProviderScope(child: SicMobileApp()));
 }

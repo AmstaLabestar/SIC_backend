@@ -86,10 +86,7 @@ class AppShell extends StatelessWidget {
 
   int _selectedIndex(String location) {
     if (location.startsWith('/transactions')) return 1;
-    if (location.startsWith('/compte') ||
-        location.startsWith('/dashboard/settings')) {
-      return 2;
-    }
+    if (location.startsWith('/compte')) return 2;
     return 0;
   }
 }

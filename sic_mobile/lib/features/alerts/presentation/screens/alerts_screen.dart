@@ -14,41 +14,44 @@ class AlertsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(alertNotifierProvider);
 
-    return SafeArea(
-      child: state.when(
-        loading: () => const SicLoading(),
-        error: (error, _) => SicErrorWidget(
-          error: error,
-          onRetry: () => ref.read(alertNotifierProvider.notifier).refresh(),
-        ),
-        data: (configs) => ListView.separated(
-          padding: const EdgeInsets.fromLTRB(
-            AppSpacing.md,
-            AppSpacing.md,
-            AppSpacing.md,
-            AppSpacing.xl,
+    return Scaffold(
+      appBar: AppBar(),
+      body: SafeArea(
+        child: state.when(
+          loading: () => const SicLoading(),
+          error: (error, _) => SicErrorWidget(
+            error: error,
+            onRetry: () => ref.read(alertNotifierProvider.notifier).refresh(),
           ),
-          itemCount: configs.length + 2,
-          separatorBuilder: (context, index) {
-            return const SizedBox(height: AppSpacing.md);
-          },
-          itemBuilder: (context, index) {
-            if (index == 0) {
-              return Text(
-                'Alertes solde',
-                style: AppTextStyles.titleLarge,
-              );
-            }
+          data: (configs) => ListView.separated(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.md,
+              AppSpacing.md,
+              AppSpacing.md,
+              AppSpacing.xl,
+            ),
+            itemCount: configs.length + 2,
+            separatorBuilder: (context, index) {
+              return const SizedBox(height: AppSpacing.md);
+            },
+            itemBuilder: (context, index) {
+              if (index == 0) {
+                return Text(
+                  'Alertes solde',
+                  style: AppTextStyles.titleLarge,
+                );
+              }
 
-            if (index == 1) {
-              return Text(
-                'Configurez les seuils pour etre prevenu avant qu une puce ne bloque une operation.',
-                style: AppTextStyles.bodyMedium,
-              );
-            }
+              if (index == 1) {
+                return Text(
+                  'Configurez les seuils pour etre prevenu avant qu une puce ne bloque une operation.',
+                  style: AppTextStyles.bodyMedium,
+                );
+              }
 
-            return AlertConfigTile(config: configs[index - 2]);
-          },
+              return AlertConfigTile(config: configs[index - 2]);
+            },
+          ),
         ),
       ),
     );

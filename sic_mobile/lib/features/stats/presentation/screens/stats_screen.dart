@@ -18,14 +18,18 @@ class StatsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final dashboardState = ref.watch(dashboardNotifierProvider);
 
-    return SafeArea(
-      child: dashboardState.when(
-        loading: () => const SicLoading(),
-        error: (error, _) => SicErrorWidget(
-          error: error,
-          onRetry: () => ref.read(dashboardNotifierProvider.notifier).refresh(),
+    return Scaffold(
+      appBar: AppBar(),
+      body: SafeArea(
+        child: dashboardState.when(
+          loading: () => const SicLoading(),
+          error: (error, _) => SicErrorWidget(
+            error: error,
+            onRetry: () =>
+                ref.read(dashboardNotifierProvider.notifier).refresh(),
+          ),
+          data: (summary) => _StatsContent(summary: summary),
         ),
-        data: (summary) => _StatsContent(summary: summary),
       ),
     );
   }

@@ -181,7 +181,7 @@ class _Header extends StatelessWidget {
       children: [
         // Avatar -> acces parametres.
         Pressable(
-          onTap: () => context.go('/dashboard/settings'),
+          onTap: () => context.push('/dashboard/settings'),
           semanticLabel: 'Profil et parametres',
           child: Container(
             height: 52,
@@ -218,14 +218,14 @@ class _Header extends StatelessWidget {
         _HeaderIconButton(
           icon: Icons.insights_rounded,
           tooltip: 'Statistiques',
-          onTap: () => context.go('/dashboard/stats'),
+          onTap: () => context.push('/dashboard/stats'),
         ),
         const SizedBox(width: 8),
         _HeaderIconButton(
           icon: Icons.notifications_outlined,
           tooltip: 'Notifications',
           hasBadge: summary.hasUnreadNotifications,
-          onTap: () => context.go('/dashboard/alerts'),
+          onTap: () => context.push('/dashboard/alerts'),
         ),
       ],
     );

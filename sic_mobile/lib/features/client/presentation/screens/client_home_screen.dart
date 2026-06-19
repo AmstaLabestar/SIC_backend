@@ -81,7 +81,7 @@ class ClientHomeScreen extends ConsumerWidget {
           if (user != null && !user.isApproved)
             _KycNudge(
               submitted: user.kycSubmitted,
-              onTap: () => context.go('/kyc'),
+              onTap: () => context.push('/kyc'),
             ),
         ],
       ),
