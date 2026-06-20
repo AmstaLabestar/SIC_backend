@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../features/account/presentation/screens/account_screen.dart';
+import '../../features/account/presentation/screens/profile_screen.dart';
 import '../../features/account/presentation/screens/security_screen.dart';
 import '../../features/alerts/presentation/screens/alerts_screen.dart';
 import '../../features/auth/presentation/providers/app_lock_provider.dart';
@@ -148,6 +149,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/dashboard/settings',
         builder: (context, state) => const SettingsScreen(),
+      ),
+      GoRoute(
+        path: '/profil',
+        builder: (context, state) => const ProfileScreen(),
       ),
       GoRoute(
         path: '/securite',

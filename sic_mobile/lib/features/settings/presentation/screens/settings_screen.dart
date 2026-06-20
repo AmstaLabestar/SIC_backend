@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/constants/app_spacing.dart';
@@ -8,17 +9,6 @@ import '../../../../core/preferences/privacy_provider.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
-
-  void _comingSoon(BuildContext context, String label) {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          behavior: SnackBarBehavior.floating,
-          content: Text('$label — bientot disponible.'),
-        ),
-      );
-  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -34,9 +24,9 @@ class SettingsScreen extends ConsumerWidget {
             const SizedBox(height: AppSpacing.lg),
             _SettingsTile(
               icon: Icons.person_outline_rounded,
-              title: 'Profil agent',
-              subtitle: 'Informations et code agent',
-              onTap: () => _comingSoon(context, 'Le profil'),
+              title: 'Profil',
+              subtitle: 'Informations du compte',
+              onTap: () => context.push('/profil'),
             ),
             const SizedBox(height: AppSpacing.md),
             _SettingsSwitchTile(
@@ -46,13 +36,6 @@ class SettingsScreen extends ConsumerWidget {
               value: hideBalances,
               onChanged: (_) =>
                   ref.read(hideBalancesProvider.notifier).toggle(),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            _SettingsTile(
-              icon: Icons.lock_outline_rounded,
-              title: 'Securite',
-              subtitle: 'Biometrie et session',
-              onTap: () => _comingSoon(context, 'Les options de securite'),
             ),
             const SizedBox(height: AppSpacing.md),
             _SettingsTile(
