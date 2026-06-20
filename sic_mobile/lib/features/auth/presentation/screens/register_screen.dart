@@ -13,9 +13,9 @@ import '../../../../core/constants/app_text_styles.dart';
 import '../../../../core/utils/validators.dart';
 import '../../../../core/widgets/fade_slide_in.dart';
 import '../../../../core/widgets/sic_button.dart';
-import '../../../../core/widgets/sic_logo.dart';
 import '../../../../core/widgets/sic_text_field.dart';
 import '../providers/auth_provider.dart';
+import '../widgets/auth_hero_scaffold.dart';
 import '../widgets/pin_header.dart';
 import '../widgets/pin_keypad.dart';
 
@@ -196,16 +196,13 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: _otpPhase
-          ? null
-          : AppBar(
-              backgroundColor: Colors.transparent,
-              title: const Text('Creer un compte'),
-            ),
-      body: _otpPhase ? _buildOtpPhase() : _buildFormPhase(),
-    );
+    if (_otpPhase) {
+      return Scaffold(
+        backgroundColor: AppColors.background,
+        body: _buildOtpPhase(),
+      );
+    }
+    return _buildFormPhase();
   }
 
   // ----------------------------------------------------------------------
@@ -275,39 +272,26 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   }
 
   Widget _buildFormPhase() {
-    return SafeArea(
-      child: SingleChildScrollView(
-        physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(24, 8, 24, 28),
-        child: Form(
+    return AuthHeroScaffold(
+      title: 'Rejoignez SIC',
+      showBack: true,
+      onBack: _submitting ? null : () => context.go('/login'),
+      // Le sous-titre s'adapte au role choisi, en douceur.
+      subtitle: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 220),
+        child: Text(
+          _isAgent
+              ? 'Compte agent : gerez vos SIM, le float et la compensation.'
+              : 'Compte client : envoyez et recevez de l\'argent simplement.',
+          key: ValueKey(_isAgent),
+          textAlign: TextAlign.center,
+        ),
+      ),
+      child: Form(
           key: _formKey,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              FadeSlideIn(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const SicLogo(size: 60),
-                    const SizedBox(height: AppSpacing.md),
-                    Text('Rejoignez SIC', style: AppTextStyles.displayLarge),
-                    const SizedBox(height: 6),
-                    // Le sous-titre s'adapte au role choisi, en douceur.
-                    AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 220),
-                      child: Text(
-                        _isAgent
-                            ? 'Compte agent : gerez vos SIM, le float et la compensation.'
-                            : 'Compte client : envoyez et recevez de l\'argent simplement.',
-                        key: ValueKey(_isAgent),
-                        style: AppTextStyles.bodyMedium,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: AppSpacing.lg),
-
               FadeSlideIn(
                 delay: const Duration(milliseconds: 70),
                 child: Column(
@@ -508,7 +492,6 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             ],
           ),
         ),
-      ),
     );
   }
 
