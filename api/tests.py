@@ -3,6 +3,7 @@ Tests pour l'API SIC
 """
 import uuid
 from decimal import Decimal
+from unittest import mock
 from django.test import TestCase, override_settings
 from django.contrib.auth.models import User
 from rest_framework.test import APITestCase, APIClient
@@ -213,7 +214,11 @@ class CompensationEngineTest(TestCase):
 
         self.assertIn('insuffisant', str(context.exception).lower())
 
-    def test_create_compensated_transaction(self):
+    # NB : en mode eager (DEBUG), la task de timeout ignore l'eta et s'exécute
+    # immédiatement, ce qui rembourserait la réservation. On neutralise donc sa
+    # planification pour vérifier l'état réservé (en prod, eager est off).
+    @mock.patch('core.tasks.check_transaction_timeout.apply_async')
+    def test_create_compensated_transaction(self, _timeout):
         """Test la création d'une transaction compensée."""
         tx = CompensationEngine.create_compensated_transaction(
             agent=self.agent,
@@ -228,6 +233,51 @@ class CompensationEngineTest(TestCase):
         self.assertEqual(tx.status, 'PENDING')
         self.assertEqual(tx.amount, Decimal('5000'))
         self.assertGreaterEqual(tx.commission_sic, 0)
+        # Réservation immédiate des fonds : puce1 (10000) débitée de 5000.
+        self.puce1.refresh_from_db()
+        self.assertEqual(self.puce1.balance, Decimal('5000.00'))
+
+    @mock.patch('core.tasks.check_transaction_timeout.apply_async')
+    def test_reservation_empeche_la_survente(self, _timeout):
+        """Deux transactions successives ne peuvent pas dépasser le solde global.
+
+        Solde total = 15000. Une 1re transaction de 10000 réserve les fonds ;
+        une 2e de 8000 doit échouer (il ne reste que 5000) — preuve que la
+        réservation à la création protège de la double-dépense.
+        """
+        CompensationEngine.create_compensated_transaction(
+            agent=self.agent, tx_type='DEPOT', amount=Decimal('10000'),
+            target_operator='ORANGE', target_phone_number='07000002',
+        )
+        with self.assertRaises(ValueError):
+            CompensationEngine.create_compensated_transaction(
+                agent=self.agent, tx_type='DEPOT', amount=Decimal('8000'),
+                target_operator='ORANGE', target_phone_number='07000002',
+            )
+        # Solde global restant = 5000 (10000 réservés sur 15000).
+        total = sum(
+            p.balance for p in Puce.objects.filter(agent=self.agent)
+        )
+        self.assertEqual(total, Decimal('5000.00'))
+
+    @mock.patch('core.tasks.check_transaction_timeout.apply_async')
+    def test_timeout_rembourse_les_fonds_reserves(self, _timeout):
+        """À l'expiration d'une transaction PENDING, les fonds réservés sont rendus."""
+        from core.tasks import check_transaction_timeout
+        tx = CompensationEngine.create_compensated_transaction(
+            agent=self.agent, tx_type='DEPOT', amount=Decimal('5000'),
+            target_operator='ORANGE', target_phone_number='07000002',
+        )
+        self.puce1.refresh_from_db()
+        self.assertEqual(self.puce1.balance, Decimal('5000.00'))  # réservé
+
+        # Exécution directe du rollback de timeout.
+        check_transaction_timeout(tx.id)
+
+        self.puce1.refresh_from_db()
+        self.assertEqual(self.puce1.balance, Decimal('10000.00'))  # remboursé
+        tx.refresh_from_db()
+        self.assertEqual(tx.status, 'FAILED')
 
     def test_create_withdrawal_transaction(self):
         """Test la création d'un retrait."""
@@ -1187,7 +1237,11 @@ class ThrottlingTest(APITestCase):
 
 
 class CompensationWebhookTest(TestCase):
-    """Securite fonds : le webhook de compensation est idempotent (anti rejeu)."""
+    """Securite fonds (modele reservation) : les fonds sont debites a la creation.
+
+    Le webhook SUCCESS ne re-debite donc PAS (sinon double comptage) ; un FAILED
+    rembourse les fonds reserves. Tout est idempotent (anti rejeu).
+    """
 
     def setUp(self):
         self.user = User.objects.create_user('whuser', 'wh@test.com', 'Passw0rd123')
@@ -1195,9 +1249,11 @@ class CompensationWebhookTest(TestCase):
             user=self.user, phone_number='70554433',
             first_name='W', last_name='H', kyc_status='APPROVED',
         )
+        # La puce est deja a 7000 : 3000 ont ete RESERVES (debites) a la creation
+        # de la transaction (modele reservation).
         self.puce = Puce.objects.create(
             agent=self.agent, operator='ORANGE',
-            phone_number='+224620010001', balance=Decimal('10000.00'),
+            phone_number='+224620010001', balance=Decimal('7000.00'),
         )
         self.tx = Transaction.objects.create(
             agent=self.agent, type='DEPOT', status='PENDING',
@@ -1210,18 +1266,35 @@ class CompensationWebhookTest(TestCase):
             cinetpay_ref='REF_TEST_1',
         )
 
-    def test_webhook_success_debite_une_seule_fois(self):
-        # 1er webhook SUCCESS : la puce est debitee de 3000 -> 7000.
+    def test_webhook_success_ne_redebite_pas(self):
+        # Les fonds sont deja reserves : le SUCCESS confirme sans re-debiter.
         CompensationEngine.process_webhook('REF_TEST_1', 'SUCCESS')
         self.puce.refresh_from_db()
         self.assertEqual(self.puce.balance, Decimal('7000.00'))
         self.detail.refresh_from_db()
         self.assertEqual(self.detail.status, 'SUCCESS')
+        self.tx.refresh_from_db()
+        self.assertEqual(self.tx.status, 'COMPLETED')
 
-        # Rejeu du meme webhook : aucun second debit (idempotence).
+        # Rejeu du meme webhook : aucun effet (idempotence).
         CompensationEngine.process_webhook('REF_TEST_1', 'SUCCESS')
         self.puce.refresh_from_db()
         self.assertEqual(self.puce.balance, Decimal('7000.00'))
+
+    def test_webhook_failed_rembourse_les_fonds_reserves(self):
+        # Un echec recredite les 3000 reserves -> retour a 10000.
+        CompensationEngine.process_webhook('REF_TEST_1', 'FAILED')
+        self.puce.refresh_from_db()
+        self.assertEqual(self.puce.balance, Decimal('10000.00'))
+        self.detail.refresh_from_db()
+        self.assertEqual(self.detail.status, 'FAILED')
+        self.tx.refresh_from_db()
+        self.assertEqual(self.tx.status, 'FAILED')
+
+        # Rejeu : pas de double remboursement (idempotence).
+        CompensationEngine.process_webhook('REF_TEST_1', 'FAILED')
+        self.puce.refresh_from_db()
+        self.assertEqual(self.puce.balance, Decimal('10000.00'))
 
     def test_webhook_reference_inconnue(self):
         tx, ok = CompensationEngine.process_webhook('REF_INEXISTANTE', 'SUCCESS')

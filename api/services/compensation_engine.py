@@ -223,13 +223,16 @@ class CompensationEngine:
     """
 
     @staticmethod
-    def calculate_plan(agent, amount_required):
+    def calculate_plan(agent, amount_required, lock=False):
         """
         Calcule le plan de compensation en déduisant en cascade depuis les puces actives de l'agent.
 
         Args:
             agent: Agent - L'agent qui effectue la transaction
             amount_required: Decimal - Montant à compenser
+            lock: bool - Si True, verrouille les puces (`select_for_update`) pour
+                serialiser les transactions concurrentes du même agent et
+                empêcher la double-dépense. À n'utiliser que dans un bloc atomic.
 
         Returns:
             list[dict] - Liste de {'puce': Puce, 'amount': Decimal}
@@ -246,8 +249,14 @@ class CompensationEngine:
         if amount_required <= 0:
             raise ValueError("Le montant doit être supérieur à 0")
 
-        # Récupérer les puces actives triées par solde décroissant
-        puces = Puce.objects.filter(agent=agent, is_active=True).order_by('-balance')
+        # Récupérer les puces actives triées par solde décroissant. Sous verrou
+        # (lock=True) les lignes sont bloquées jusqu'au commit : une 2e
+        # transaction concurrente du même agent attend, puis recalcule sur le
+        # solde déjà réservé (anti double-dépense).
+        puces_qs = Puce.objects.filter(agent=agent, is_active=True)
+        if lock:
+            puces_qs = puces_qs.select_for_update()
+        puces = list(puces_qs.order_by('-balance'))
 
         # Calcul du solde global
         total_balance = sum(puce.balance for puce in puces)
@@ -322,8 +331,10 @@ class CompensationEngine:
         # Calcul des commissions
         commissions = CommissionCalculator.calculate(amount, tx_type)
 
-        # Calcul du plan de compensation
-        plan = CompensationEngine.calculate_plan(agent, amount)
+        # Calcul du plan SOUS VERROU + réservation immédiate des fonds (voir
+        # boucle ci-dessous) : empêche deux transactions concurrentes du même
+        # agent de sur-allouer le même solde.
+        plan = CompensationEngine.calculate_plan(agent, amount, lock=True)
         is_compensated = len(plan) > 1
 
         # Création de la transaction
@@ -345,17 +356,26 @@ class CompensationEngine:
         # Création des détails de compensation pour chaque puce du plan
         for item in plan:
             ref = f"CPAY_{uuid.uuid4().hex[:8].upper()}"
+            puce = item['puce']
+
+            # Réservation immédiate des fonds (la puce est verrouillée par
+            # calculate_plan(lock=True)) : le solde reflète les fonds engagés dès
+            # la création. Le règlement (webhook SUCCESS) ne re-débite donc PAS ;
+            # un échec/timeout/remboursement recrédite (cf _process_failed,
+            # _process_refunded, check_transaction_timeout).
+            puce.balance -= item['amount']
+            puce.save(update_fields=['balance', 'updated_at'])
 
             CompensationDetail.objects.create(
                 transaction=tx,
-                puce=item['puce'],
+                puce=puce,
                 amount_deducted=item['amount'],
                 status='PENDING',
                 cinetpay_ref=ref
             )
 
             logger.debug(
-                f"CompensationDetail créé: puce {item['puce'].id}, "
+                f"CompensationDetail créé + fonds réservés: puce {puce.id}, "
                 f"montant {item['amount']} FCFA, ref {ref}"
             )
 
@@ -456,11 +476,13 @@ class CompensationEngine:
         if target_puce.agent != agent:
             raise ValueError("Puce cible n'appartient pas à cet agent")
 
-        # Vérifier les soldes
-        if source_puce.balance < amount:
+        # Verrou + relecture de la puce source pour la réservation (anti
+        # double-dépense concurrente).
+        source = Puce.objects.select_for_update().get(id=source_puce.id)
+        if source.balance < amount:
             raise ValueError(
                 f"Solde insuffisant sur la puce source. "
-                f"Disponible: {source_puce.balance} FCFA, Requis: {amount} FCFA"
+                f"Disponible: {source.balance} FCFA, Requis: {amount} FCFA"
             )
 
         # Calcul des commissions
@@ -477,11 +499,16 @@ class CompensationEngine:
             is_compensated=False
         )
 
+        # Réservation immédiate sur la puce source (le crédit de la cible se fait
+        # au règlement, cf _process_success).
+        source.balance -= amount
+        source.save(update_fields=['balance', 'updated_at'])
+
         # Créer le détail de compensation
         ref = f"CPAY_{uuid.uuid4().hex[:8].upper()}"
         CompensationDetail.objects.create(
             transaction=tx,
-            puce=source_puce,
+            puce=source,
             amount_deducted=amount,
             status='PENDING',
             cinetpay_ref=ref
@@ -558,29 +585,28 @@ class CompensationEngine:
             return tx, False
 
         detail.status = 'SUCCESS'
-        detail.save()
+        detail.save(update_fields=['status'])
 
-        # Déduire le solde de la puce sous verrou (évite les lost-updates).
-        puce = Puce.objects.select_for_update().get(id=detail.puce_id)
-        puce.balance -= detail.amount_deducted
-        puce.save()
-
+        # Les fonds ont déjà été RÉSERVÉS (débités) à la création : le succès du
+        # règlement ne re-débite donc PAS la puce (sinon double comptage).
         logger.info(
-            f"Débit {detail.amount_deducted} FCFA sur puce {puce.id} ({puce.operator})"
+            f"Règlement confirmé pour le détail {detail.id} "
+            f"({detail.amount_deducted} FCFA, déjà réservés)"
         )
 
         # Vérifier si toute la transaction est complète
         all_details = tx.compensation_details.all()
         if all(d.status == 'SUCCESS' for d in all_details):
             tx.status = 'COMPLETED'
-            tx.save()
+            tx.save(update_fields=['status'])
 
-            # Pour les SWAP, créditer la puce cible
+            # Pour les SWAP, créditer la puce cible (la source a été réservée à
+            # la création).
             if tx.type == 'SWAP':
                 try:
-                    target_puce = Puce.objects.get(id=tx.target_phone_number)
+                    target_puce = Puce.objects.select_for_update().get(id=tx.target_phone_number)
                     target_puce.balance += tx.amount
-                    target_puce.save()
+                    target_puce.save(update_fields=['balance', 'updated_at'])
 
                     logger.info(
                         f"Crédit {tx.amount} FCFA sur puce cible {target_puce.id}"
@@ -599,31 +625,54 @@ class CompensationEngine:
     @staticmethod
     @transaction.atomic
     def _process_failed(detail, tx):
-        """Traite l'échec d'un détail de compensation."""
+        """Traite l'échec d'un détail : rembourse les fonds réservés à la création.
+
+        Idempotent (verrou + garde de statut) : un rejeu ne recrédite pas.
+        """
+        detail = CompensationDetail.objects.select_for_update().get(id=detail.id)
+        if detail.status in ('FAILED', 'REFUNDED'):
+            logger.info(f"Webhook FAILED rejoué ignoré pour le détail {detail.id}")
+            return tx, False
+
+        # Les fonds avaient été réservés à la création -> on recrédite la puce.
+        puce = Puce.objects.select_for_update().get(id=detail.puce_id)
+        puce.balance += detail.amount_deducted
+        puce.save(update_fields=['balance', 'updated_at'])
+
         detail.status = 'FAILED'
-        detail.save()
+        detail.save(update_fields=['status'])
 
         tx.status = 'FAILED'
-        tx.save()
+        tx.save(update_fields=['status'])
 
-        logger.warning(f"Transaction {tx.id} FAILED")
+        logger.warning(
+            f"Transaction {tx.id} FAILED — {detail.amount_deducted} FCFA "
+            f"remboursés sur puce {puce.id}"
+        )
 
         return tx, True
 
     @staticmethod
     @transaction.atomic
     def _process_refunded(detail, tx):
-        """Traite le remboursement d'un détail de compensation."""
-        # Si le détail était déjà succès, créditer la puce
-        if detail.status == 'SUCCESS':
-            puce = detail.puce
-            puce.balance += detail.amount_deducted
-            puce.save()
+        """Traite le remboursement d'un détail de compensation.
 
+        Les fonds étant réservés dès la création, tout détail encore engagé
+        (PENDING ou SUCCESS) est recrédité. Idempotent.
+        """
+        detail = CompensationDetail.objects.select_for_update().get(id=detail.id)
+        if detail.status == 'REFUNDED':
+            logger.info(f"Remboursement déjà appliqué pour le détail {detail.id}")
+            return tx, False
+
+        if detail.status in ('SUCCESS', 'PENDING'):
+            puce = Puce.objects.select_for_update().get(id=detail.puce_id)
+            puce.balance += detail.amount_deducted
+            puce.save(update_fields=['balance', 'updated_at'])
             logger.info(f"Remboursement {detail.amount_deducted} FCFA sur puce {puce.id}")
 
         detail.status = 'REFUNDED'
-        detail.save()
+        detail.save(update_fields=['status'])
 
         logger.info(f"Remboursement appliqué pour détail {detail.id}")
 
