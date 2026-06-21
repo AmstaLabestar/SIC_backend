@@ -131,6 +131,10 @@ class Puce(models.Model):
 
     class Meta:
         unique_together = ('agent', 'operator', 'phone_number')
+        indexes = [
+            # Plan de compensation : puces actives d'un agent triées par solde.
+            models.Index(fields=['agent', 'is_active']),
+        ]
 
     def __str__(self):
         return f"{self.operator} - {self.phone_number} ({self.balance} FCFA)"
@@ -179,9 +183,17 @@ class Transaction(models.Model):
     fee = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
 
     is_compensated = models.BooleanField(default=False)
-    
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [
+            # Historique : transactions d'un agent du plus récent au plus ancien.
+            models.Index(fields=['agent', '-created_at']),
+            # Balayages par statut (timeout, réconciliation, tableaux de bord).
+            models.Index(fields=['status']),
+        ]
 
     def __str__(self):
         return f"{self.type} - {self.amount} FCFA ({self.status})"
@@ -194,9 +206,18 @@ class CompensationDetail(models.Model):
     
     amount_deducted = models.DecimalField(max_digits=12, decimal_places=2)
     status = models.CharField(max_length=20, default='PENDING') # PENDING, SUCCESS, REFUNDED
-    cinetpay_ref = models.CharField(max_length=100, null=True, blank=True)
-    
+    # Référence de règlement (CinetPay). Le webhook fait `.get(cinetpay_ref=...)`
+    # dessus : unique (intégrité, pas de double détail) + indexé (lookup O(log n)).
+    cinetpay_ref = models.CharField(
+        max_length=100, null=True, blank=True, unique=True, db_index=True
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['status']),
+        ]
 
     def __str__(self):
         return f"Comp {self.transaction.id} - {self.puce.operator} ({self.status})"

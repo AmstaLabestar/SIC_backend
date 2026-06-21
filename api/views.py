@@ -484,7 +484,15 @@ class TransactionViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, views
     def get_queryset(self):
         agent = getattr(self.request.user, 'agent_profile', None)
         if agent:
-            return Transaction.objects.filter(agent=agent).order_by('-created_at')
+            # prefetch des détails (+puce) : le serializer les imbrique -> sans
+            # cela on a un N+1 (1 requête/détail + 1/puce). Ici 2 requêtes fixes.
+            return (
+                Transaction.objects
+                .filter(agent=agent)
+                .select_related('agent')
+                .prefetch_related('compensation_details__puce')
+                .order_by('-created_at')
+            )
         return Transaction.objects.none()
 
     def retrieve(self, request, *args, **kwargs):

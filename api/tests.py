@@ -261,6 +261,29 @@ class CompensationEngineTest(TestCase):
         self.assertEqual(total, Decimal('5000.00'))
 
     @mock.patch('core.tasks.check_transaction_timeout.apply_async')
+    def test_liste_transactions_pas_de_n_plus_1(self, _timeout):
+        """La sérialisation de l'historique fait un nombre FIXE de requêtes.
+
+        Avec prefetch (détails + puces) : 3 requêtes quel que soit le nombre de
+        transactions (sinon N+1). Reproduit le queryset de TransactionViewSet.
+        """
+        from api.serializers import TransactionSerializer
+        for _ in range(3):
+            CompensationEngine.create_compensated_transaction(
+                agent=self.agent, tx_type='DEPOT', amount=Decimal('1000'),
+                target_operator='ORANGE', target_phone_number='07000002',
+            )
+        qs = (
+            Transaction.objects.filter(agent=self.agent)
+            .select_related('agent')
+            .prefetch_related('compensation_details__puce')
+            .order_by('-created_at')
+        )
+        # 1 (transactions) + 1 (détails prefetch) + 1 (puces prefetch).
+        with self.assertNumQueries(3):
+            _ = TransactionSerializer(qs, many=True).data
+
+    @mock.patch('core.tasks.check_transaction_timeout.apply_async')
     def test_timeout_rembourse_les_fonds_reserves(self, _timeout):
         """À l'expiration d'une transaction PENDING, les fonds réservés sont rendus."""
         from core.tasks import check_transaction_timeout
