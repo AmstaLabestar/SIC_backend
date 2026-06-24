@@ -1,0 +1,15 @@
+# Modèle de configuration de signature RELEASE.
+#
+# 1) Générer un keystore (À FAIRE UNE SEULE FOIS, garder le .jks en lieu sûr) :
+#    keytool -genkey -v -keystore sic-release.jks -keyalg RSA -keysize 2048 \
+#            -validity 10000 -alias sic
+#
+# 2) Copier ce fichier en `android/key.properties` (gitignoré) et renseigner :
+#
+# storeFile=/chemin/absolu/vers/sic-release.jks
+# storePassword=********
+# keyAlias=sic
+# keyPassword=********
+#
+# Sans `key.properties`, le build release retombe sur la clé debug (dev/CI).
+# Ne JAMAIS versionner key.properties ni le .jks.

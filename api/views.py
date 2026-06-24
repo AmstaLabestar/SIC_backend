@@ -1084,19 +1084,33 @@ class CommissionInfoView(generics.GenericAPIView):
 
 class HealthCheckView(generics.GenericAPIView):
     """
-    Point de terminaison de santé de l'API.
+    Sonde de santé/readiness de l'API (pour load balancer, orchestrateur, uptime).
 
-    GET /api/health/
+    GET /api/health/  -> 200 si l'app ET la base répondent, 503 sinon.
+    Vérifie la connectivité DB (la cause la plus fréquente d'indisponibilité).
     """
     permission_classes = [AllowAny]
     throttle_classes = []
 
     def get(self, request):
-        return Response({
-            'status': 'healthy',
+        db_ok = True
+        try:
+            from django.db import connection
+            with connection.cursor() as cursor:
+                cursor.execute('SELECT 1')
+                cursor.fetchone()
+        except Exception:
+            db_ok = False
+            logger.error("Health check: base de données injoignable")
+
+        payload = {
+            'status': 'healthy' if db_ok else 'unhealthy',
+            'database': 'up' if db_ok else 'down',
             'timestamp': timezone.now().isoformat(),
-            'version': '1.0.0'
-        })
+            'version': '1.0.0',
+        }
+        http_status = status.HTTP_200_OK if db_ok else status.HTTP_503_SERVICE_UNAVAILABLE
+        return Response(payload, status=http_status)
 
 
 # =============================================================================
