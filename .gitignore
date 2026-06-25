@@ -9,6 +9,10 @@ env/
 .env.local
 db.sqlite3
 *.log
+
+# Etat du scheduler Celery Beat (genere au runtime)
+celerybeat-schedule
+celerybeat-schedule.*
 .DS_Store
 .idea/
 .vscode/

@@ -1,0 +1,47 @@
+# =============================================================================
+# Contexte de build de l'image backend : on n'embarque QUE le code Django.
+# (Avant : COPY . . embarquait tout le repo, dont sic_mobile/ -> images ~8.5 Go.)
+# =============================================================================
+
+# Application mobile Flutter (n'a rien a faire dans l'image backend)
+sic_mobile/
+
+# Git & meta
+.git/
+.gitignore
+.gitattributes
+
+# Python
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+venv/
+env/
+.venv/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Node (build tailwind eventuel)
+**/node_modules/
+
+# Logs & donnees locales
+*.log
+logs/
+db.sqlite3
+backups-export/
+
+# Ops (montes via volume dans docker-compose, pas embarques dans l'image)
+ops/
+
+# Docker / CI / docs / editeurs
+Dockerfile
+docker-compose.yml
+.dockerignore
+.github/
+*.md
+.idea/
+.vscode/
+.DS_Store
