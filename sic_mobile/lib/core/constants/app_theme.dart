@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import 'app_colors.dart';
 import 'app_radii.dart';
@@ -18,7 +17,9 @@ class AppTheme {
       brightness: Brightness.light,
     );
 
-    final textTheme = GoogleFonts.interTextTheme().copyWith(
+    // Police Inter bundlee (cf. AppTextStyles.fontFamily). Le fontFamily global
+    // s'applique a tous les styles non surcharges du textTheme.
+    final textTheme = TextTheme(
       displayLarge: AppTextStyles.displayLarge,
       titleLarge: AppTextStyles.titleLarge,
       titleMedium: AppTextStyles.titleMedium,
@@ -31,7 +32,7 @@ class AppTheme {
       useMaterial3: true,
       colorScheme: colorScheme,
       scaffoldBackgroundColor: AppColors.background,
-      fontFamily: GoogleFonts.inter().fontFamily,
+      fontFamily: AppTextStyles.fontFamily,
       textTheme: textTheme,
       splashColor: AppColors.primary.withValues(alpha: 0.06),
       highlightColor: AppColors.primary.withValues(alpha: 0.04),

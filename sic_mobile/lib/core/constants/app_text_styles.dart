@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import 'app_colors.dart';
 
-/// Typographie SIC — Inter exclusivement (fallback SF Pro Display).
+/// Typographie SIC — Inter exclusivement (police **bundlee**, pas de fetch
+/// reseau : demarrage instantane + fonctionne hors-ligne).
 ///
 /// La hierarchie place le solde tout en haut du poids visuel : aucun autre
 /// element ne doit le dominer.
 class AppTextStyles {
   const AppTextStyles._();
+
+  /// Famille bundlee (cf. pubspec `fonts:` + assets/fonts/Inter.ttf, variable).
+  static const fontFamily = 'Inter';
 
   /// Base Inter pour toute l'application.
   static TextStyle _inter({
@@ -18,7 +21,8 @@ class AppTextStyles {
     double? letterSpacing,
     double? height,
   }) {
-    return GoogleFonts.inter(
+    return TextStyle(
+      fontFamily: fontFamily,
       fontSize: fontSize,
       fontWeight: fontWeight,
       color: color,
