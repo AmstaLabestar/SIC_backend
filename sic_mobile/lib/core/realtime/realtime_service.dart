@@ -69,7 +69,14 @@ class RealtimeService {
 
   Future<void> _open() async {
     if (!_active) return;
-    final token = await _tokenReader();
+    String? token;
+    try {
+      token = await _tokenReader();
+    } catch (_) {
+      // Lecture du jeton en echec (ex. erreur secure-storage) : on retente.
+      _scheduleReconnect();
+      return;
+    }
     if (!_active) return;
     if (token == null || token.isEmpty) {
       return; // pas de session : on reconnectera via start() apres login
