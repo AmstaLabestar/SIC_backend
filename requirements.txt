@@ -24,8 +24,16 @@ django-cors-headers>=4.3,<5.0
 celery>=5.3,<6.0
 redis>=5.0,<6.0
 
+# Temps reel (WebSockets) : Channels + serveur ASGI + channel layer Redis
+channels>=4.1,<5.0
+channels-redis>=4.2,<5.0
+daphne>=4.1,<5.0
+
 # Server
 gunicorn>=22.0,<23.0
+
+# Monitoring d'erreurs (actif seulement si SENTRY_DSN est defini)
+sentry-sdk[django]>=2.0,<3.0
 
 # Utilities
 python-dotenv>=1.0,<2.0

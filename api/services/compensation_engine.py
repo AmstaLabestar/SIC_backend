@@ -15,6 +15,27 @@ from .cinetpay_client import CinetPayClient
 logger = logging.getLogger('sic.transactions')
 
 
+def _notify_after_commit(agent_id, payload):
+    """Programme une notification temps réel APRÈS le commit de la transaction.
+
+    Pattern fintech : on ne pousse l'événement que lorsque l'écriture est
+    durable (sinon le client re-synchroniserait sur un état non commité). La
+    notification ne doit jamais faire échouer l'opération métier : import tardif
+    + try/except (channels peut être absent en test pur, etc.).
+    """
+    if agent_id is None:
+        return
+
+    def _send():
+        try:
+            from api.realtime.notify import notify_agent
+            notify_agent(agent_id, payload)
+        except Exception:  # noqa: BLE001 — une notif ratée n'annule rien
+            logger.warning("Notification temps réel échouée", exc_info=True)
+
+    transaction.on_commit(_send)
+
+
 class CommissionCalculator:
     """
     Calculateur de commissions pour les transactions SIC.
@@ -396,6 +417,16 @@ class CompensationEngine:
             eta=timezone.now() + timedelta(minutes=timeout_minutes)
         )
 
+        # Notification temps réel (après commit) : l'agent voit l'opération
+        # apparaître/se mettre à jour sans rafraîchir.
+        _notify_after_commit(agent.id, {
+            'type': 'tx.created',
+            'transaction_id': str(tx.id),
+            'tx_type': tx.type,
+            'status': tx.status,
+            'amount': str(tx.amount),
+        })
+
         return tx
 
     @staticmethod
@@ -615,6 +646,13 @@ class CompensationEngine:
                     logger.error(f"Impossible de trouver la puce cible pour le swap {tx.id}")
 
             logger.info(f"Transaction {tx.id} COMPLETED")
+            _notify_after_commit(tx.agent_id, {
+                'type': 'tx.completed',
+                'transaction_id': str(tx.id),
+                'tx_type': tx.type,
+                'status': 'COMPLETED',
+                'amount': str(tx.amount),
+            })
         else:
             logger.info(
                 f"Transaction {tx.id} en attente ({all_details.filter(status='SUCCESS').count()}/{all_details.count()} détails)"
@@ -649,6 +687,14 @@ class CompensationEngine:
             f"Transaction {tx.id} FAILED — {detail.amount_deducted} FCFA "
             f"remboursés sur puce {puce.id}"
         )
+
+        _notify_after_commit(tx.agent_id, {
+            'type': 'tx.failed',
+            'transaction_id': str(tx.id),
+            'tx_type': tx.type,
+            'status': 'FAILED',
+            'amount': str(tx.amount),
+        })
 
         return tx, True
 

@@ -284,6 +284,20 @@ class CompensationEngineTest(TestCase):
             _ = TransactionSerializer(qs, many=True).data
 
     @mock.patch('core.tasks.check_transaction_timeout.apply_async')
+    @mock.patch('api.realtime.notify.notify_agent')
+    def test_notifie_temps_reel_a_la_creation(self, mock_notify, _timeout):
+        """Créer une transaction émet un événement temps réel (après commit)."""
+        with self.captureOnCommitCallbacks(execute=True):
+            CompensationEngine.create_compensated_transaction(
+                agent=self.agent, tx_type='DEPOT', amount=Decimal('1000'),
+                target_operator='ORANGE', target_phone_number='07000002',
+            )
+        self.assertTrue(mock_notify.called)
+        agent_id_arg, payload = mock_notify.call_args.args
+        self.assertEqual(str(agent_id_arg), str(self.agent.id))
+        self.assertEqual(payload['type'], 'tx.created')
+
+    @mock.patch('core.tasks.check_transaction_timeout.apply_async')
     def test_timeout_rembourse_les_fonds_reserves(self, _timeout):
         """À l'expiration d'une transaction PENDING, les fonds réservés sont rendus."""
         from core.tasks import check_transaction_timeout

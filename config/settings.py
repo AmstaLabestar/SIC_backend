@@ -69,12 +69,15 @@ else:
 # Application definition
 
 INSTALLED_APPS = [
+    # daphne en tete : remplace le runserver WSGI par le serveur ASGI (Channels).
+    'daphne',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'channels',
     'corsheaders',
     'rest_framework',
     'rest_framework_simplejwt',
@@ -335,6 +338,23 @@ CELERY_TASK_ALWAYS_EAGER = DEBUG  # En dev, exécution synchrone
 
 
 # ============================================================================
+# Temps reel (Django Channels / WebSockets)
+# ============================================================================
+
+ASGI_APPLICATION = 'config.asgi.application'
+
+# Channel layer = Redis (le meme service que Celery). Les tests le remplacent
+# par la couche en memoire via @override_settings.
+CHANNELS_REDIS_URL = get_env('CHANNELS_REDIS_URL', default=CELERY_BROKER_URL)
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels_redis.core.RedisChannelLayer',
+        'CONFIG': {'hosts': [CHANNELS_REDIS_URL]},
+    }
+}
+
+
+# ============================================================================
 # Sécurité HTTPS / Headers
 # ============================================================================
 
@@ -486,3 +506,35 @@ else:
 
 DEFAULT_FROM_EMAIL = get_env('DEFAULT_FROM_EMAIL', default='SIC <no-reply@sic.local>')
 OTP_TTL_MINUTES = int(get_env('OTP_TTL_MINUTES', default='10'))
+
+
+# ============================================================================
+# Monitoring d'erreurs — Sentry (actif uniquement si SENTRY_DSN est défini)
+# ============================================================================
+# Aucune dépendance d'exécution si SENTRY_DSN est vide (cas dev/CI) : l'import et
+# l'init ne se font que lorsqu'un DSN est fourni en production.
+SENTRY_DSN = get_env('SENTRY_DSN', default='')
+if SENTRY_DSN:
+    try:
+        import sentry_sdk
+        from sentry_sdk.integrations.django import DjangoIntegration
+
+        sentry_sdk.init(
+            dsn=SENTRY_DSN,
+            integrations=[DjangoIntegration()],
+            environment=get_env(
+                'SENTRY_ENVIRONMENT',
+                default='development' if DEBUG else 'production',
+            ),
+            traces_sample_rate=float(
+                get_env('SENTRY_TRACES_SAMPLE_RATE', default='0.0')
+            ),
+            # Fintech : ne pas transmettre d'informations personnelles par défaut.
+            send_default_pii=False,
+            release=get_env('SENTRY_RELEASE', default=None),
+        )
+    except ImportError:
+        import logging as _logging
+        _logging.getLogger('django').warning(
+            "SENTRY_DSN défini mais sentry-sdk non installé : monitoring désactivé."
+        )
