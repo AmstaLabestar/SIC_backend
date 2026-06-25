@@ -9,5 +9,7 @@ urlpatterns = [
     path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
     
     path('api/', include('api.urls')),
+    # Metriques Prometheus -> /metrics (a restreindre au reseau interne en prod).
+    path('', include('django_prometheus.urls')),
     path('', include('dashboard.urls')),
 ]

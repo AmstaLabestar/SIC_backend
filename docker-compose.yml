@@ -142,9 +142,46 @@ services:
       redis:
         condition: service_healthy
 
+  # Prometheus : collecte des metriques exposees par l'app sur /metrics
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: sic_prometheus
+    restart: unless-stopped
+    volumes:
+      - ./ops/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./ops/monitoring/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=15d"
+    ports:
+      - "9090:9090"
+    depends_on:
+      - web
+
+  # Grafana : tableaux de bord par-dessus Prometheus
+  grafana:
+    image: grafana/grafana:11.2.0
+    container_name: sic_grafana
+    restart: unless-stopped
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - ./ops/monitoring/grafana-datasource.yml:/etc/grafana/provisioning/datasources/datasource.yml:ro
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+
 volumes:
   postgres_data:
   redis_data:
   static_volume:
   media_volume:
   pg_backups:
+  prometheus_data:
+  grafana_data:

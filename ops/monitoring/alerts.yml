@@ -1,0 +1,67 @@
+# =============================================================================
+# SIC - Regles d'alerte Prometheus
+# Metriques fournies par django-prometheus (prefixe django_http_*).
+# =============================================================================
+groups:
+  - name: sic-backend
+    rules:
+      # 1. L'application ne repond plus au scrape.
+      - alert: AppDown
+        expr: up{job="sic-web"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Backend SIC injoignable"
+          description: "Prometheus ne scrape plus web:8000 depuis 1 min."
+
+      # 2. Taux d'erreurs serveur (5xx) > 5% sur 5 min.
+      - alert: HighServerErrorRate
+        expr: |
+          sum(rate(django_http_responses_total_by_status_total{status=~"5.."}[5m]))
+          /
+          sum(rate(django_http_responses_total_by_status_total[5m]))
+          > 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Taux d'erreurs 5xx eleve (>5%)"
+          description: "Plus de 5% des reponses sont des erreurs serveur sur 5 min."
+
+      # 3. Latence p95 des requetes > 1s sur 5 min.
+      - alert: HighRequestLatency
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(django_http_requests_latency_seconds_by_view_method_bucket[5m])) by (le)
+          ) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Latence p95 > 1s"
+          description: "Le 95e percentile de latence depasse 1s sur 5 min."
+
+      # 4. Pic d'erreurs client (4xx) — souvent signe d'abus ou de bug front.
+      - alert: HighClientErrorRate
+        expr: |
+          sum(rate(django_http_responses_total_by_status_total{status=~"4.."}[5m]))
+          /
+          sum(rate(django_http_responses_total_by_status_total[5m]))
+          > 0.30
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Taux d'erreurs 4xx eleve (>30%)"
+          description: "Plus de 30% des reponses sont des erreurs client sur 10 min."
+
+      # 5. Aucune requete servie depuis 10 min (panne silencieuse / route morte).
+      - alert: NoTraffic
+        expr: sum(rate(django_http_requests_total_by_method_total[10m])) == 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Aucun trafic HTTP depuis 10 min"
+          description: "L'app ne sert plus aucune requete (verifier daphne / reseau)."

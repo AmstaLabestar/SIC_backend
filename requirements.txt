@@ -35,6 +35,9 @@ gunicorn>=22.0,<23.0
 # Monitoring d'erreurs (actif seulement si SENTRY_DSN est defini)
 sentry-sdk[django]>=2.0,<3.0
 
+# Metriques Prometheus (expose /metrics : requetes, latence, codes HTTP...)
+django-prometheus>=2.3,<3.0
+
 # Utilities
 python-dotenv>=1.0,<2.0
 

@@ -78,6 +78,8 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'channels',
+    # Metriques Prometheus (instrumente requetes/latence ; expose /metrics).
+    'django_prometheus',
     'corsheaders',
     'rest_framework',
     'rest_framework_simplejwt',
@@ -93,6 +95,9 @@ INSTALLED_APPS = [
 TAILWIND_APP_NAME = 'theme'
 
 MIDDLEWARE = [
+    # Prometheus : Before en tout premier, After en tout dernier, pour mesurer
+    # la latence de l'ensemble de la chaine de middlewares.
+    'django_prometheus.middleware.PrometheusBeforeMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -101,6 +106,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'django_prometheus.middleware.PrometheusAfterMiddleware',
 ]
 
 ROOT_URLCONF = 'config.urls'
