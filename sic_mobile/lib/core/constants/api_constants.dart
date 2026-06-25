@@ -18,6 +18,22 @@ class ApiConstants {
   static const connectTimeout = Duration(milliseconds: 30000);
   static const receiveTimeout = Duration(milliseconds: 30000);
 
+  /// URL WebSocket des notifications temps reel, derivee de [baseUrl] :
+  /// `http(s)://host/api` -> `ws(s)://host/ws/notifications/`. Le jeton JWT est
+  /// ajoute en query string par le client (`?token=...`).
+  static String get wsNotificationsUrl {
+    var url = baseUrl;
+    if (url.endsWith('/api')) {
+      url = url.substring(0, url.length - '/api'.length);
+    }
+    if (url.startsWith('https://')) {
+      url = 'wss://${url.substring('https://'.length)}';
+    } else if (url.startsWith('http://')) {
+      url = 'ws://${url.substring('http://'.length)}';
+    }
+    return '$url/ws/notifications/';
+  }
+
   // Auth
   static const login = '/auth/login/';
   static const deviceVerify = '/auth/device/verify/';

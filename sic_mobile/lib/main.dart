@@ -8,8 +8,10 @@ import 'package:sentry_flutter/sentry_flutter.dart';
 import 'core/app_globals.dart';
 import 'core/constants/app_theme.dart';
 import 'core/preferences/privacy_provider.dart';
+import 'core/realtime/realtime_provider.dart';
 import 'core/router/app_router.dart';
 import 'features/auth/presentation/providers/app_lock_provider.dart';
+import 'features/auth/presentation/providers/auth_provider.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -64,13 +66,19 @@ class _SicMobileAppState extends ConsumerState<SicMobileApp>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     final lock = ref.read(appLockProvider.notifier);
+    final realtime = ref.read(realtimeServiceProvider);
     switch (state) {
       case AppLifecycleState.paused:
         // App en arriere-plan : on memorise l'instant pour reverrouiller plus
-        // tard si l'absence se prolonge.
+        // tard si l'absence se prolonge, et on coupe le temps reel.
         lock.onPaused();
+        realtime.stop();
       case AppLifecycleState.resumed:
         lock.onResumed();
+        // Retour au premier plan : reconnexion (+ re-sync) si connecte.
+        if (ref.read(authControllerProvider).valueOrNull != null) {
+          realtime.start();
+        }
       case AppLifecycleState.inactive:
       case AppLifecycleState.hidden:
       case AppLifecycleState.detached:
@@ -81,6 +89,17 @@ class _SicMobileAppState extends ConsumerState<SicMobileApp>
   @override
   Widget build(BuildContext context) {
     final router = ref.watch(appRouterProvider);
+
+    // Pilote le temps reel selon l'etat d'authentification : connexion au login,
+    // coupure au logout / expiration de session.
+    ref.listen(authControllerProvider, (previous, next) {
+      final realtime = ref.read(realtimeServiceProvider);
+      if (next.valueOrNull != null) {
+        realtime.start();
+      } else {
+        realtime.stop();
+      }
+    });
 
     return MaterialApp.router(
       title: 'SIC Mobile',
