@@ -1,0 +1,3 @@
+# Les scripts shell doivent garder des fins de ligne LF, sinon /bin/sh dans les
+# conteneurs Alpine echoue ("bad interpreter"). Force LF quel que soit l'OS.
+*.sh text eol=lf

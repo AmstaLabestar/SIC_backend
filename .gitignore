@@ -13,5 +13,5 @@ db.sqlite3
 .idea/
 .vscode/
 
-# Docker
-.dockerignore
+# Sauvegardes exportees localement (cf ops/backup/README.md)
+backups-export/

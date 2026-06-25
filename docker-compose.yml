@@ -94,6 +94,30 @@ services:
       redis:
         condition: service_healthy
 
+  # Sauvegarde PostgreSQL automatisee (pg_dump horodate + rotation)
+  db-backup:
+    image: postgres:16-alpine
+    container_name: sic_db_backup
+    restart: unless-stopped
+    environment:
+      - PGHOST=db
+      - PGPORT=5432
+      - PGUSER=sic_user
+      - PGPASSWORD=8258
+      - PGDATABASE=sic_db
+      # Quotidien ; rotation 7 jours + 4 semaines + 6 mois.
+      - BACKUP_INTERVAL_SECONDS=86400
+      - KEEP_DAILY=7
+      - KEEP_WEEKLY=4
+      - KEEP_MONTHLY=6
+    volumes:
+      - ./ops/backup:/ops:ro
+      - pg_backups:/backups
+    entrypoint: ["/bin/sh", "/ops/entrypoint.sh"]
+    depends_on:
+      db:
+        condition: service_healthy
+
   # Celery Beat (planificateur des taches periodiques : reconciliation, purge OTP)
   celery-beat:
     build:
@@ -123,3 +147,4 @@ volumes:
   redis_data:
   static_volume:
   media_volume:
+  pg_backups:
