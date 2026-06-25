@@ -39,6 +39,10 @@ class SicLogo extends StatelessWidget {
         child: Image.asset(
           AppAssets.logoLight,
           fit: BoxFit.contain,
+          // Decode a la taille d'affichage (x DPR) plutot qu'en pleine
+          // resolution du JPEG : moins de memoire et de temps de decodage.
+          cacheWidth:
+              (size * MediaQuery.devicePixelRatioOf(context)).round(),
           // Repli discret si l'asset manque (build sans images).
           errorBuilder: (context, error, stack) => const SizedBox.shrink(),
         ),

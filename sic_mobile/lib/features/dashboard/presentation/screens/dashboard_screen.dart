@@ -52,8 +52,6 @@ class _DashboardContent extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final isBalanceVisible = ref.watch(heroBalanceVisibleProvider);
-
     return SingleChildScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
       child: Column(
@@ -65,18 +63,29 @@ class _DashboardContent extends ConsumerWidget {
             child: _Header(summary: summary),
           ).animate().fadeIn(duration: 300.ms).slideY(begin: -0.1, end: 0),
 
-          // 2. Hero card
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-            child: BalanceHeroCard(
-              totalBalance: summary.totalBalance,
-              todayCompensated: summary.compensation.today,
-              activeSimCount: summary.activeSimCount,
-              isVisible: isBalanceVisible,
-              onToggleVisibility: () {
-                HapticFeedback.lightImpact();
-                ref.read(heroBalanceVisibleProvider.notifier).update((s) => !s);
-              },
+          // 2. Hero card. La visibilite du solde est consommee localement
+          // (Consumer) : basculer l'oeil ne reconstruit que la carte, pas tout
+          // le dashboard, et ne rejoue pas les animations d'entree.
+          RepaintBoundary(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+              child: Consumer(
+                builder: (context, ref, _) {
+                  final isVisible = ref.watch(heroBalanceVisibleProvider);
+                  return BalanceHeroCard(
+                    totalBalance: summary.totalBalance,
+                    todayCompensated: summary.compensation.today,
+                    activeSimCount: summary.activeSimCount,
+                    isVisible: isVisible,
+                    onToggleVisibility: () {
+                      HapticFeedback.lightImpact();
+                      ref
+                          .read(heroBalanceVisibleProvider.notifier)
+                          .update((s) => !s);
+                    },
+                  );
+                },
+              ),
             ),
           )
               .animate()
@@ -123,18 +132,22 @@ class _DashboardContent extends ConsumerWidget {
                 end: 0,
               ),
 
-          // 4. Mes SIM (wallet empile)
-          Padding(
-            padding: const EdgeInsets.only(top: 16, bottom: 8),
-            child: SimCardsSection(
-              balances: summary.balances,
-              onManageTap: () => AddSimSheet.show(context),
-              onCardTap: (balance) =>
-                  BalanceUpdateBottomSheet.show(context, balance),
-              onHistoryTap: (balance) =>
-                  _comingSoon(context, 'Historique ${balance.operatorName}'),
-              onModifyTap: (balance) =>
-                  ModifySimSheet.show(context, balance),
+          // 4. Mes SIM (wallet empile). Isole dans un RepaintBoundary : ses
+          // repaints (animation des montants, flou du mode masque) ne
+          // repeignent pas le reste du dashboard.
+          RepaintBoundary(
+            child: Padding(
+              padding: const EdgeInsets.only(top: 16, bottom: 8),
+              child: SimCardsSection(
+                balances: summary.balances,
+                onManageTap: () => AddSimSheet.show(context),
+                onCardTap: (balance) =>
+                    BalanceUpdateBottomSheet.show(context, balance),
+                onHistoryTap: (balance) =>
+                    _comingSoon(context, 'Historique ${balance.operatorName}'),
+                onModifyTap: (balance) =>
+                    ModifySimSheet.show(context, balance),
+              ),
             ),
           ).animate().fadeIn(delay: 250.ms, duration: 400.ms).slideY(
                 begin: 0.1,

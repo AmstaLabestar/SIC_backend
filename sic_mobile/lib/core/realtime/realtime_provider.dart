@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -11,30 +13,40 @@ import 'realtime_service.dart';
 /// Service temps reel de l'app (singleton). Le cycle de vie (start/stop selon
 /// l'auth et le premier plan) est pilote depuis `main.dart`.
 final realtimeServiceProvider = Provider<RealtimeService>((ref) {
+  Timer? resyncTimer;
+
+  // Re-synchronisation debouncee : la base via REST reste la source de verite.
+  // Une rafale d'evenements (plusieurs transactions confirmees coup sur coup)
+  // ne declenche qu'un seul re-fetch. On invalide (re-fetch paresseux) plutot
+  // que de patcher l'etat depuis le payload socket.
+  void scheduleResync() {
+    resyncTimer?.cancel();
+    resyncTimer = Timer(const Duration(milliseconds: 400), () {
+      ref.invalidate(dashboardNotifierProvider);
+      ref.invalidate(transactionsNotifierProvider);
+    });
+  }
+
   final service = RealtimeService(
     tokenReader: () => ref.read(tokenStorageProvider).readAccess(),
     baseWsUrl: () => ApiConstants.wsNotificationsUrl,
-    onConnected: () => _resync(ref),
-    onEvent: (event) => _handleEvent(ref, event),
+    onConnected: scheduleResync,
+    onEvent: (event) {
+      final type = (event['type'] as String?) ?? '';
+      if (!type.startsWith('tx.')) return;
+      scheduleResync();
+      _notify(event);
+    },
   );
-  ref.onDispose(service.stop);
+
+  ref.onDispose(() {
+    resyncTimer?.cancel();
+    service.stop();
+  });
   return service;
 });
 
-/// Re-synchronisation : la base via REST reste la source de verite. On invalide
-/// (re-fetch paresseux) plutot que de patcher l'etat depuis le socket.
-void _resync(Ref ref) {
-  ref.invalidate(dashboardNotifierProvider);
-  ref.invalidate(transactionsNotifierProvider);
-}
-
-void _handleEvent(Ref ref, Map<String, dynamic> event) {
-  final type = (event['type'] as String?) ?? '';
-  if (!type.startsWith('tx.')) return;
-
-  // Evenement de transaction : on re-fetch (verite serveur) puis on notifie.
-  _resync(ref);
-
+void _notify(Map<String, dynamic> event) {
   final message = switch (event['status'] as String?) {
     'COMPLETED' => 'Transaction confirmee.',
     'FAILED' => 'Transaction echouee.',
