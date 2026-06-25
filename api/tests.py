@@ -2,9 +2,12 @@
 Tests pour l'API SIC
 """
 import uuid
+from datetime import timedelta
 from decimal import Decimal
 from unittest import mock
+from django.conf import settings
 from django.test import TestCase, override_settings
+from django.utils import timezone
 from django.contrib.auth.models import User
 from rest_framework.test import APITestCase, APIClient
 from rest_framework import status
@@ -1337,6 +1340,71 @@ class CompensationWebhookTest(TestCase):
         tx, ok = CompensationEngine.process_webhook('REF_INEXISTANTE', 'SUCCESS')
         self.assertIsNone(tx)
         self.assertFalse(ok)
+
+
+class BeatTasksTest(TestCase):
+    """Taches periodiques (celery-beat) : reconciliation + purge OTP."""
+
+    def setUp(self):
+        self.user = User.objects.create_user('beatuser', 'beat@test.com', 'Passw0rd123')
+        self.agent = Agent.objects.create(
+            user=self.user, phone_number='70557788',
+            first_name='B', last_name='T', kyc_status='APPROVED',
+        )
+        # Puce deja a 7000 : 3000 reserves a la creation de la transaction.
+        self.puce = Puce.objects.create(
+            agent=self.agent, operator='ORANGE',
+            phone_number='+224620077001', balance=Decimal('7000.00'),
+        )
+
+    def _pending_tx_with_detail(self):
+        tx = Transaction.objects.create(
+            agent=self.agent, type='DEPOT', status='PENDING',
+            amount=Decimal('3000'), target_operator='ORANGE',
+            target_phone_number='70000009',
+        )
+        CompensationDetail.objects.create(
+            transaction=tx, puce=self.puce, amount_deducted=Decimal('3000'),
+            status='PENDING', cinetpay_ref='REF_BEAT_1',
+        )
+        return tx
+
+    def test_reconcile_rollback_pending_perime(self):
+        from core.tasks import reconcile_stale_transactions
+        tx = self._pending_tx_with_detail()
+        # Rendre la transaction "perimee" (created_at ancien : bypass auto_now_add).
+        old = timezone.now() - timedelta(
+            minutes=settings.TRANSACTION_TIMEOUT_MINUTES + 10
+        )
+        Transaction.objects.filter(id=tx.id).update(created_at=old)
+
+        self.assertEqual(reconcile_stale_transactions(), 1)
+        tx.refresh_from_db()
+        self.puce.refresh_from_db()
+        self.assertEqual(tx.status, 'FAILED')
+        self.assertEqual(self.puce.balance, Decimal('10000.00'))  # 3000 rendus
+
+    def test_reconcile_ignore_transaction_recente(self):
+        from core.tasks import reconcile_stale_transactions
+        tx = self._pending_tx_with_detail()  # created_at = maintenant
+        self.assertEqual(reconcile_stale_transactions(), 0)
+        tx.refresh_from_db()
+        self.assertEqual(tx.status, 'PENDING')
+        self.puce.refresh_from_db()
+        self.assertEqual(self.puce.balance, Decimal('7000.00'))  # rien touche
+
+    def test_cleanup_expired_otps(self):
+        from core.tasks import cleanup_expired_otps
+        from core.models import EmailOtp
+        now = timezone.now()
+        EmailOtp.objects.create(
+            email='old@t.com', code='111111', expires_at=now - timedelta(hours=48)
+        )
+        recent = EmailOtp.objects.create(
+            email='new@t.com', code='222222', expires_at=now + timedelta(minutes=10)
+        )
+        self.assertEqual(cleanup_expired_otps(), 1)
+        self.assertTrue(EmailOtp.objects.filter(id=recent.id).exists())
 
 
 class AlertConfigAPITest(APITestCase):

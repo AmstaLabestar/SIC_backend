@@ -94,6 +94,30 @@ services:
       redis:
         condition: service_healthy
 
+  # Celery Beat (planificateur des taches periodiques : reconciliation, purge OTP)
+  celery-beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sic_celery_beat
+    restart: unless-stopped
+    command: celery -A config beat --loglevel=info
+    volumes:
+      - .:/app
+    environment:
+      - DEBUG=True
+      - DATABASE_URL=postgresql://sic_user:8258@db:5432/sic_db
+      - USE_DOCKER=True
+      - ALLOWED_HOSTS=localhost,127.0.0.1
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - SECRET_KEY=change-this-in-production-use-secure-random-key
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
 volumes:
   postgres_data:
   redis_data:

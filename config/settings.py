@@ -414,13 +414,18 @@ LOGGING = {
             'formatter': 'verbose',
         },
         'security_file': {
-            'class': 'logging.FileHandler',
+            # Rotatif : evite que le fichier de log grossisse sans limite en prod.
+            'class': 'logging.handlers.RotatingFileHandler',
             'filename': BASE_DIR / 'logs' / 'security.log',
+            'maxBytes': 5 * 1024 * 1024,  # 5 Mo
+            'backupCount': 5,
             'formatter': 'security',
         },
         'transactions_file': {
-            'class': 'logging.FileHandler',
+            'class': 'logging.handlers.RotatingFileHandler',
             'filename': BASE_DIR / 'logs' / 'transactions.log',
+            'maxBytes': 5 * 1024 * 1024,  # 5 Mo
+            'backupCount': 5,
             'formatter': 'verbose',
         },
     },
