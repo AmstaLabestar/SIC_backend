@@ -484,6 +484,12 @@ MIN_TRANSACTION_AMOUNT = 100
 # Timeout des transactions (minutes)
 TRANSACTION_TIMEOUT_MINUTES = int(get_env('TRANSACTION_TIMEOUT_MINUTES', '5'))
 
+# Agregateur de paiement actif (point de bascule unique, cf
+# api/services/payment_provider.py). 'cinetpay' aujourd'hui ; 'hub2' a venir.
+# Changer d'agregateur = nouvelle implementation + ce reglage, sans toucher au
+# moteur de compensation.
+PAYMENT_PROVIDER = get_env('PAYMENT_PROVIDER', default='cinetpay').lower()
+
 # Configuration CinetPay
 # MODE pilote tout : 'mock' (defaut, aucun appel reseau, reponses simulees),
 # 'sandbox' (vraies requetes API de test), 'live' (production, vrai argent).

@@ -978,7 +978,24 @@ class TransactionViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, views
             "cpm_payment_status": "ACCEPTED"
         }
         """
-        # Vérification de la signature HMAC
+        # 1) Allowlist IP : si configurée, n'accepter que les IP source CinetPay.
+        # (La signature reste exigée même si la liste est vide.)
+        allowed_ips = []
+        if isinstance(settings.CINETPAY_CONFIG, dict):
+            allowed_ips = settings.CINETPAY_CONFIG.get('WEBHOOK_IPS') or []
+        if allowed_ips:
+            src_ip = request.META.get('REMOTE_ADDR')
+            if src_ip not in allowed_ips:
+                logger.warning(f"Webhook: IP source non autorisée: {src_ip}")
+                log_activity(
+                    action="WEBHOOK_IP_REFUSED",
+                    description=f"Webhook depuis une IP non autorisée: {src_ip}",
+                    level="ERROR",
+                    ip_address=src_ip,
+                )
+                return Response({'error': 'IP not allowed'}, status=status.HTTP_403_FORBIDDEN)
+
+        # 2) Vérification de la signature HMAC.
         x_token = request.headers.get('x-token')
         if not x_token:
             logger.warning("Webhook: Signature manquante")
@@ -988,7 +1005,6 @@ class TransactionViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, views
             )
 
         ref = request.data.get('cpm_trans_id') or request.data.get('cinetpay_ref')
-        site_id = request.data.get('cpm_site_id', '')
         # Prefer explicit webhook secret name for clarity
         secret_key = None
         if isinstance(settings.CINETPAY_CONFIG, dict):
@@ -1003,7 +1019,7 @@ class TransactionViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, views
                 {'error': 'Missing ref'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        # Vérification de la signature HMAC - Exiger la clé MÊME en développement pour éviter le contournement
+        # Exiger la clé MÊME en développement pour éviter le contournement.
         if not secret_key:
             logger.error("Webhook: secret key not configured for CinetPay webhooks")
             return Response(
@@ -1011,9 +1027,17 @@ class TransactionViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, views
                 status=status.HTTP_503_SERVICE_UNAVAILABLE
             )
 
+        # HMAC selon le schéma documenté CinetPay : concaténation ordonnée des
+        # champs du corps. (docs.cinetpay.com/api/1.0-fr/checkout/hmac)
+        # ⚠️ Ordre/champs à reconfirmer en sandbox avant la mise en production.
+        hmac_fields = (
+            'cpm_site_id', 'cpm_trans_id', 'cpm_trans_date', 'cpm_amount',
+            'cpm_currency', 'signature', 'payment_method', 'cel_pho',
+        )
+        sign_data = ''.join(str(request.data.get(f, '')) for f in hmac_fields)
         expected_token = hmac.new(
             secret_key.encode('utf-8'),
-            (site_id + str(ref)).encode('utf-8'),
+            sign_data.encode('utf-8'),
             hashlib.sha256
         ).hexdigest()
 
@@ -1021,7 +1045,7 @@ class TransactionViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, views
             logger.warning(f"Webhook: Signature invalide pour {ref}")
             log_activity(
                 action="WEBHOOK_INVALID_SIGNATURE",
-                description=f"Tentative de webhook avec signature invalide: {ref[:20]}...",
+                description=f"Tentative de webhook avec signature invalide: {str(ref)[:20]}...",
                 level="ERROR"
             )
             return Response(
@@ -1029,7 +1053,33 @@ class TransactionViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, views
                 status=status.HTTP_403_FORBIDDEN
             )
 
-        # Traiter le webhook via le moteur de compensation
+        # 3) Vérification du montant : le montant notifié doit correspondre au
+        # montant réservé pour ce détail (anti-falsification).
+        from core.models import CompensationDetail
+        try:
+            detail = CompensationDetail.objects.get(cinetpay_ref=ref)
+        except CompensationDetail.DoesNotExist:
+            logger.warning(f"Webhook: Référence introuvable: {ref}")
+            return Response({'error': 'Transaction not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        cpm_amount = request.data.get('cpm_amount')
+        if cpm_amount not in (None, ''):
+            try:
+                if Decimal(str(cpm_amount)) != detail.amount_deducted:
+                    logger.warning(
+                        f"Webhook: montant incohérent pour {ref} "
+                        f"(notifié={cpm_amount}, attendu={detail.amount_deducted})"
+                    )
+                    log_activity(
+                        action="WEBHOOK_AMOUNT_MISMATCH",
+                        description=f"Montant webhook incohérent pour {str(ref)[:20]}",
+                        level="ERROR",
+                    )
+                    return Response({'error': 'Amount mismatch'}, status=status.HTTP_400_BAD_REQUEST)
+            except (InvalidOperation, ValueError):
+                return Response({'error': 'Invalid amount'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # 4) Traiter le webhook via le moteur de compensation.
         payment_status = request.data.get('cpm_payment_status', '')
         new_status = 'SUCCESS' if payment_status in ('ACCEPTED', 'SUCCESS') else 'FAILED'
 

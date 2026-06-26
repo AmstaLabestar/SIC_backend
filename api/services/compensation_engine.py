@@ -10,7 +10,7 @@ import uuid
 import logging
 
 from core.models import Puce, Transaction, CompensationDetail, Agent
-from .cinetpay_client import CinetPayClient
+from .payment_provider import get_payment_provider
 
 logger = logging.getLogger('sic.transactions')
 
@@ -51,7 +51,7 @@ def _settle_after_commit(items):
 
     `items`: liste de dicts {ref, amount, operator, phone_number}.
     """
-    client = CinetPayClient()
+    client = get_payment_provider()
     if client.use_mock() or not items:
         return
 

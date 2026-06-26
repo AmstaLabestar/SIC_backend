@@ -33,6 +33,25 @@ def _rollback_pending(tx):
             )
 
 
+def _provider_confirms_payment(client, tx_id):
+    """True si au moins un détail de la transaction est confirmé abouti côté
+    agrégateur. Toute erreur réseau -> False (on laissera le rollback se faire).
+    """
+    from core.models import CompensationDetail
+    refs = CompensationDetail.objects.filter(
+        transaction_id=tx_id
+    ).values_list('cinetpay_ref', flat=True)
+    for ref in refs:
+        try:
+            res = client.check_transaction(ref)
+        except Exception:  # noqa: BLE001 — indisponibilité réseau = on ne confirme pas
+            logger.warning(f"[RECONCILE] check CinetPay échoué pour {ref}", exc_info=True)
+            continue
+        if res.get('status') in ('SUCCESS', 'ACCEPTED', 'COMPLETED'):
+            return True
+    return False
+
+
 @shared_task
 def check_transaction_timeout(transaction_id):
     """Expiration d'UNE transaction (planifiée à la création, eta = +timeout).
@@ -57,11 +76,14 @@ def reconcile_stale_transactions():
     restées PENDING au-delà du délai (ex. tâche `eta` perdue après redémarrage du
     worker, ou webhook manqué) en rollbackant les fonds réservés.
 
-    NOTE CinetPay : quand le règlement réel sera branché, interroger d'abord
-    `CinetPayClient.check_transaction()` pour confirmer le statut côté opérateur
-    AVANT de rollbacker (ne jamais annuler un paiement réellement abouti). Sans
-    règlement réel, le rollback local est correct.
+    En mode réel (sandbox/live), on interroge d'abord l'agrégateur
+    (`check_transaction`) HORS verrou : si un détail est confirmé abouti côté
+    opérateur, on NE rollback PAS (ne jamais annuler un paiement réel). En mode
+    mock, le rollback local est correct.
     """
+    from api.services.payment_provider import get_payment_provider
+
+    client = get_payment_provider()
     margin = settings.TRANSACTION_TIMEOUT_MINUTES + 5
     cutoff = timezone.now() - timedelta(minutes=margin)
     stale_ids = list(
@@ -72,6 +94,13 @@ def reconcile_stale_transactions():
     count = 0
     for tx_id in stale_ids:
         try:
+            # En mode réel : confirmer côté CinetPay AVANT de prendre le verrou
+            # (pas d'appel réseau pendant qu'on tient un verrou de ligne).
+            if not client.use_mock() and _provider_confirms_payment(client, tx_id):
+                logger.warning(
+                    f"[RECONCILE] {tx_id} confirmée côté agrégateur -> pas de rollback"
+                )
+                continue
             with transaction.atomic():
                 tx = Transaction.objects.select_for_update().get(id=tx_id)
                 if tx.status != 'PENDING':

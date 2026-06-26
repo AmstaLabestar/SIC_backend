@@ -1646,29 +1646,29 @@ class CinetPaySettlementWiringTest(TestCase):
         )
 
     @mock.patch('core.tasks.check_transaction_timeout.apply_async')
-    @mock.patch('api.services.compensation_engine.CinetPayClient')
-    def test_mode_mock_ne_declenche_pas_encaissement(self, MockClient, _timeout):
-        MockClient.return_value.use_mock.return_value = True
+    @mock.patch('api.services.compensation_engine.get_payment_provider')
+    def test_mode_mock_ne_declenche_pas_encaissement(self, MockProvider, _timeout):
+        MockProvider.return_value.use_mock.return_value = True
         with self.captureOnCommitCallbacks(execute=True):
             CompensationEngine.create_compensated_transaction(
                 agent=self.agent, tx_type='DEPOT', amount=Decimal('5000'),
                 target_operator='ORANGE', target_phone_number='07000002',
             )
-        MockClient.return_value.initiate_payment.assert_not_called()
+        MockProvider.return_value.initiate_payment.assert_not_called()
 
     @mock.patch('core.tasks.check_transaction_timeout.apply_async')
-    @mock.patch('api.services.compensation_engine.CinetPayClient')
-    def test_mode_reel_declenche_encaissement_apres_commit(self, MockClient, _timeout):
-        MockClient.return_value.use_mock.return_value = False
-        MockClient.return_value.initiate_payment.return_value = {'success': True}
+    @mock.patch('api.services.compensation_engine.get_payment_provider')
+    def test_mode_reel_declenche_encaissement_apres_commit(self, MockProvider, _timeout):
+        MockProvider.return_value.use_mock.return_value = False
+        MockProvider.return_value.initiate_payment.return_value = {'success': True}
         with self.captureOnCommitCallbacks(execute=True):
             CompensationEngine.create_compensated_transaction(
                 agent=self.agent, tx_type='DEPOT', amount=Decimal('5000'),
                 target_operator='ORANGE', target_phone_number='07000002',
             )
         # Un seul détail (une puce couvre le montant) -> un encaissement.
-        self.assertEqual(MockClient.return_value.initiate_payment.call_count, 1)
-        kwargs = MockClient.return_value.initiate_payment.call_args.kwargs
+        self.assertEqual(MockProvider.return_value.initiate_payment.call_count, 1)
+        kwargs = MockProvider.return_value.initiate_payment.call_args.kwargs
         self.assertEqual(kwargs['amount'], Decimal('5000'))
         self.assertEqual(kwargs['operator'], 'ORANGE')
         self.assertTrue(kwargs['transaction_id'].startswith('CPAY_'))
@@ -1701,3 +1701,156 @@ class CinetPayPayoutTest(TestCase):
             )
         self.assertTrue(res.get('mock'))
         m_req.post.assert_not_called()
+
+
+class PaymentProviderFactoryTest(TestCase):
+    """Point de bascule unique get_payment_provider() (interface PaymentProvider).
+
+    Garantit qu'on dépend de l'abstraction, pas d'un agrégateur en dur : changer
+    `PAYMENT_PROVIDER` suffit à basculer (CinetPay aujourd'hui, HUB2 demain).
+    """
+
+    def test_defaut_retourne_un_payment_provider_cinetpay(self):
+        from api.services.payment_provider import PaymentProvider, get_payment_provider
+        from api.services.cinetpay_client import CinetPayClient
+        provider = get_payment_provider()
+        self.assertIsInstance(provider, PaymentProvider)
+        self.assertIsInstance(provider, CinetPayClient)
+
+    @override_settings(PAYMENT_PROVIDER='hub2')
+    def test_provider_non_implemente_leve_une_erreur_claire(self):
+        from django.core.exceptions import ImproperlyConfigured
+        from api.services.payment_provider import get_payment_provider
+        with self.assertRaises(ImproperlyConfigured):
+            get_payment_provider()
+
+
+@override_settings(CINETPAY_CONFIG=_cfg(SECRET_KEY='topsecret', SITE_ID='SITE1'))
+class CinetPayWebhookHTTPTest(APITestCase):
+    """Durcissement du webhook HTTP : HMAC, montant, IP (lot 4)."""
+
+    URL = '/api/transactions/webhook/'
+
+    def setUp(self):
+        self.user = User.objects.create_user('whagent', 'wh@t.com', 'Passw0rd123')
+        self.agent = Agent.objects.create(
+            user=self.user, phone_number='70998877',
+            first_name='W', last_name='H', kyc_status='APPROVED',
+        )
+        self.puce = Puce.objects.create(
+            agent=self.agent, operator='ORANGE',
+            phone_number='+22670998877', balance=Decimal('5000.00'),
+        )
+        self.tx = Transaction.objects.create(
+            agent=self.agent, type='DEPOT', status='PENDING',
+            amount=Decimal('5000'), target_operator='ORANGE',
+            target_phone_number='07000003',
+        )
+        self.detail = CompensationDetail.objects.create(
+            transaction=self.tx, puce=self.puce,
+            amount_deducted=Decimal('5000'), status='PENDING',
+            cinetpay_ref='REF_WH_1',
+        )
+
+    def _body(self, **over):
+        body = {
+            'cpm_site_id': 'SITE1', 'cpm_trans_id': 'REF_WH_1',
+            'cpm_trans_date': '2026-06-26 10:00:00', 'cpm_amount': '5000',
+            'cpm_currency': 'XOF', 'signature': 'sig123',
+            'payment_method': 'ORANGE', 'cel_pho': '70998877',
+            'cpm_payment_status': 'ACCEPTED',
+        }
+        body.update(over)
+        return body
+
+    def _token(self, body, secret='topsecret'):
+        import hmac as _h, hashlib as _hl
+        fields = (
+            'cpm_site_id', 'cpm_trans_id', 'cpm_trans_date', 'cpm_amount',
+            'cpm_currency', 'signature', 'payment_method', 'cel_pho',
+        )
+        data = ''.join(str(body.get(f, '')) for f in fields)
+        return _h.new(secret.encode(), data.encode(), _hl.sha256).hexdigest()
+
+    def test_signature_valide_traite_le_webhook(self):
+        body = self._body()
+        res = self.client.post(
+            self.URL, body, format='json', HTTP_X_TOKEN=self._token(body)
+        )
+        self.assertEqual(res.status_code, status.HTTP_200_OK)
+        self.detail.refresh_from_db()
+        self.assertEqual(self.detail.status, 'SUCCESS')
+
+    def test_signature_invalide_refusee(self):
+        body = self._body()
+        res = self.client.post(
+            self.URL, body, format='json', HTTP_X_TOKEN='mauvais_token'
+        )
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+        self.detail.refresh_from_db()
+        self.assertEqual(self.detail.status, 'PENDING')
+
+    def test_montant_incoherent_refuse(self):
+        body = self._body(cpm_amount='999999')  # != 5000 réservés
+        res = self.client.post(
+            self.URL, body, format='json', HTTP_X_TOKEN=self._token(body)
+        )
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.detail.refresh_from_db()
+        self.assertEqual(self.detail.status, 'PENDING')
+
+    @override_settings(CINETPAY_CONFIG=_cfg(
+        SECRET_KEY='topsecret', SITE_ID='SITE1', WEBHOOK_IPS=['10.1.2.3']
+    ))
+    def test_ip_non_autorisee_refusee(self):
+        body = self._body()
+        res = self.client.post(
+            self.URL, body, format='json',
+            HTTP_X_TOKEN=self._token(body), REMOTE_ADDR='8.8.8.8',
+        )
+        self.assertEqual(res.status_code, status.HTTP_403_FORBIDDEN)
+
+
+class CinetPayReconcileRealModeTest(TestCase):
+    """Réconciliation en mode réel : ne pas annuler un paiement abouti (lot 4)."""
+
+    def setUp(self):
+        self.user = User.objects.create_user('recagent', 'rec@t.com', 'Passw0rd123')
+        self.agent = Agent.objects.create(
+            user=self.user, phone_number='70557799',
+            first_name='R', last_name='C', kyc_status='APPROVED',
+        )
+        self.puce = Puce.objects.create(
+            agent=self.agent, operator='ORANGE',
+            phone_number='+22670557799', balance=Decimal('7000.00'),
+        )
+
+    def _stale_pending(self):
+        tx = Transaction.objects.create(
+            agent=self.agent, type='DEPOT', status='PENDING',
+            amount=Decimal('3000'), target_operator='ORANGE',
+            target_phone_number='70000009',
+        )
+        CompensationDetail.objects.create(
+            transaction=tx, puce=self.puce, amount_deducted=Decimal('3000'),
+            status='PENDING', cinetpay_ref='REF_REC_1',
+        )
+        old = timezone.now() - timedelta(
+            minutes=settings.TRANSACTION_TIMEOUT_MINUTES + 10
+        )
+        Transaction.objects.filter(id=tx.id).update(created_at=old)
+        return tx
+
+    @mock.patch('api.services.payment_provider.get_payment_provider')
+    def test_paiement_confirme_cinetpay_pas_de_rollback(self, mock_get):
+        from core.tasks import reconcile_stale_transactions
+        provider = mock_get.return_value
+        provider.use_mock.return_value = False
+        provider.check_transaction.return_value = {'status': 'SUCCESS'}
+        tx = self._stale_pending()
+
+        self.assertEqual(reconcile_stale_transactions(), 0)  # rien rollbacké
+        tx.refresh_from_db()
+        self.assertEqual(tx.status, 'PENDING')
+        self.puce.refresh_from_db()
+        self.assertEqual(self.puce.balance, Decimal('7000.00'))  # intact

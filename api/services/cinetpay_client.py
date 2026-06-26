@@ -15,6 +15,8 @@ from decimal import Decimal
 import requests
 from django.conf import settings
 
+from .payment_provider import PaymentProvider
+
 logger = logging.getLogger('sic.transactions')
 
 
@@ -23,9 +25,9 @@ class CinetPayException(Exception):
     pass
 
 
-class CinetPayClient:
+class CinetPayClient(PaymentProvider):
     """
-    Client pour l'API CinetPay v2.
+    Client pour l'API CinetPay v2 (implémentation de `PaymentProvider`).
 
     Gère:
     - La création de transactions de paiement
