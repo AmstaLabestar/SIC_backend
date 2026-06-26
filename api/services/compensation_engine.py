@@ -36,6 +36,43 @@ def _notify_after_commit(agent_id, payload):
     transaction.on_commit(_send)
 
 
+def _settle_after_commit(items):
+    """Déclenche l'encaissement CinetPay réel APRÈS le commit (hors verrou DB).
+
+    Pattern fintech : on n'émet l'appel réseau qu'une fois les fonds réservés
+    durablement écrits (sinon on encaisserait sur un état non commité), et hors
+    du bloc `atomic` pour ne pas tenir les verrous pendant un aller-retour HTTP.
+
+    En mode mock, ne fait STRICTEMENT rien (aucun appel réseau). En sandbox/live,
+    appelle `initiate_payment` par détail (un détail = une puce = un paiement,
+    identifié par son `cinetpay_ref` que le webhook renverra). Un échec d'appel
+    ne casse pas l'opération : la transaction reste PENDING et sera rattrapée par
+    le timeout / la réconciliation.
+
+    `items`: liste de dicts {ref, amount, operator, phone_number}.
+    """
+    client = CinetPayClient()
+    if client.use_mock() or not items:
+        return
+
+    def _run():
+        for it in items:
+            try:
+                client.initiate_payment(
+                    transaction_id=it['ref'],
+                    amount=it['amount'],
+                    operator=it['operator'],
+                    phone_number=it['phone_number'],
+                )
+            except Exception:  # noqa: BLE001 — un échec d'appel n'annule rien
+                logger.error(
+                    "CinetPay: échec initiate_payment pour %s", it['ref'],
+                    exc_info=True,
+                )
+
+    transaction.on_commit(_run)
+
+
 class CommissionCalculator:
     """
     Calculateur de commissions pour les transactions SIC.
@@ -374,7 +411,9 @@ class CompensationEngine:
             f"Transaction {tx.id} créée: {tx_type} {amount} FCFA → {target_operator} {target_phone_number}"
         )
 
-        # Création des détails de compensation pour chaque puce du plan
+        # Création des détails de compensation pour chaque puce du plan.
+        # On accumule les ordres d'encaissement à émettre APRÈS le commit.
+        settlement_items = []
         for item in plan:
             ref = f"CPAY_{uuid.uuid4().hex[:8].upper()}"
             puce = item['puce']
@@ -400,14 +439,18 @@ class CompensationEngine:
                 f"montant {item['amount']} FCFA, ref {ref}"
             )
 
-            # En environnement de production, déclencher le paiement CinetPay ici
-            # CinetPayClient.initiate_payment(
-            #     transaction_id=tx.id,
-            #     amount=item['amount'],
-            #     operator=item['puce'].operator,
-            #     phone_number=item['puce'].phone_number,
-            #     webhook_url=settings.CINETPAY_CONFIG['NOTIFY_URL']
-            # )
+            # Le `ref` sert d'identifiant côté CinetPay : le webhook le renverra
+            # (cpm_trans_id) et process_webhook retrouve le détail par cinetpay_ref.
+            settlement_items.append({
+                'ref': ref,
+                'amount': item['amount'],
+                'operator': puce.operator,
+                'phone_number': puce.phone_number,
+            })
+
+        # Encaissement CinetPay réel (sandbox/live) déclenché après commit, hors
+        # verrou. No-op en mode mock.
+        _settle_after_commit(settlement_items)
 
         # Planification du timeout
         from core.tasks import check_transaction_timeout

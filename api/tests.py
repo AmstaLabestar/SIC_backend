@@ -1629,3 +1629,46 @@ class CinetPayModeTest(TestCase):
         self.assertTrue(res['success'])
         self.assertTrue(res.get('mock'))
         m_req.post.assert_not_called()
+
+
+class CinetPaySettlementWiringTest(TestCase):
+    """Branchement de l'encaissement réel après commit (lot 2)."""
+
+    def setUp(self):
+        self.user = User.objects.create_user('setagent', 'setl@t.com', 'Passw0rd123')
+        self.agent = Agent.objects.create(
+            user=self.user, phone_number='70112233',
+            first_name='S', last_name='T', kyc_status='APPROVED',
+        )
+        self.puce = Puce.objects.create(
+            agent=self.agent, operator='ORANGE',
+            phone_number='+22670112233', balance=Decimal('20000.00'),
+        )
+
+    @mock.patch('core.tasks.check_transaction_timeout.apply_async')
+    @mock.patch('api.services.compensation_engine.CinetPayClient')
+    def test_mode_mock_ne_declenche_pas_encaissement(self, MockClient, _timeout):
+        MockClient.return_value.use_mock.return_value = True
+        with self.captureOnCommitCallbacks(execute=True):
+            CompensationEngine.create_compensated_transaction(
+                agent=self.agent, tx_type='DEPOT', amount=Decimal('5000'),
+                target_operator='ORANGE', target_phone_number='07000002',
+            )
+        MockClient.return_value.initiate_payment.assert_not_called()
+
+    @mock.patch('core.tasks.check_transaction_timeout.apply_async')
+    @mock.patch('api.services.compensation_engine.CinetPayClient')
+    def test_mode_reel_declenche_encaissement_apres_commit(self, MockClient, _timeout):
+        MockClient.return_value.use_mock.return_value = False
+        MockClient.return_value.initiate_payment.return_value = {'success': True}
+        with self.captureOnCommitCallbacks(execute=True):
+            CompensationEngine.create_compensated_transaction(
+                agent=self.agent, tx_type='DEPOT', amount=Decimal('5000'),
+                target_operator='ORANGE', target_phone_number='07000002',
+            )
+        # Un seul détail (une puce couvre le montant) -> un encaissement.
+        self.assertEqual(MockClient.return_value.initiate_payment.call_count, 1)
+        kwargs = MockClient.return_value.initiate_payment.call_args.kwargs
+        self.assertEqual(kwargs['amount'], Decimal('5000'))
+        self.assertEqual(kwargs['operator'], 'ORANGE')
+        self.assertTrue(kwargs['transaction_id'].startswith('CPAY_'))
