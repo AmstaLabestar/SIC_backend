@@ -333,6 +333,131 @@ class CinetPayClient:
                 'message': str(e)
             }
 
+    # ------------------------------------------------------------------ #
+    # Décaissement / transfert d'argent (API Transfert CinetPay)
+    # docs.cinetpay.com/api/1.0-fr/transfert
+    # ------------------------------------------------------------------ #
+    def _transfer_token(self) -> str:
+        """Authentifie le compte transfert et retourne un token de session.
+
+        CinetPay : POST {transfer_base}/auth/login en x-www-form-urlencoded
+        (apikey + password) -> token réutilisé pour les requêtes suivantes.
+        """
+        resp = requests.post(
+            f"{self.transfer_base_url}/auth/login",
+            data={'apikey': self.api_key, 'password': self.transfer_password},
+            timeout=30,
+        )
+        resp.raise_for_status()
+        body = resp.json()
+        token = (body.get('data') or {}).get('token') if isinstance(body.get('data'), dict) else body.get('token')
+        if not token:
+            raise CinetPayException("Transfert: token d'authentification absent")
+        return token
+
+    def _transfer_add_contact(self, token, phone_number, name, prefix):
+        """Enregistre le contact destinataire (prérequis CinetPay au transfert).
+
+        Idempotent côté usage : si le contact existe déjà, CinetPay renvoie une
+        erreur non bloquante que l'on ignore.
+        """
+        import json
+        parts = (name or 'SIC').split(' ', 1)
+        contact = [{
+            'prefix': prefix,
+            'phone': phone_number,
+            'name': parts[0],
+            'surname': parts[1] if len(parts) > 1 else parts[0],
+            'email': 'noreply@sic.local',
+        }]
+        try:
+            requests.post(
+                f"{self.transfer_base_url}/transfer/money/send/contact",
+                params={'token': token, 'lang': 'fr'},
+                data={'data': json.dumps(contact)},
+                timeout=30,
+            )
+        except Exception:  # noqa: BLE001 — contact déjà présent = non bloquant
+            logger.info("CinetPay transfert: ajout contact ignoré (déjà présent ?)")
+
+    def payout(
+        self,
+        transaction_id: str,
+        amount: Decimal,
+        operator: str,
+        phone_number: str,
+        name: str = 'SIC',
+        country_prefix: str = '226',
+        currency: str = 'XOF',
+    ) -> Dict[str, Any]:
+        """Décaissement : envoie de l'argent vers un numéro mobile money.
+
+        Mode mock -> succès simulé. Mode sandbox/live -> flux API Transfert :
+        auth (token) -> ajout du contact -> envoi.
+
+        ⚠️ Le chemin réel n'est PAS testé contre l'API CinetPay : champs/endpoints
+        exacts à confirmer en sandbox (et IP publique fixe à whitelister chez
+        CinetPay pour un transfert sans validation manuelle).
+
+        Returns: {'success': bool, 'transfer_id': str|None, 'message': str}
+        """
+        if self.use_mock():
+            return self._mock_payout(transaction_id, amount, operator, phone_number)
+
+        import json
+        try:
+            token = self._transfer_token()
+            self._transfer_add_contact(token, phone_number, name, country_prefix)
+
+            payload = [{
+                'prefix': country_prefix,
+                'phone': phone_number,
+                'amount': int(Decimal(str(amount))),
+                'client_transaction_id': transaction_id,
+                'notify_url': self.notify_url,
+                'payment_method': operator.upper(),
+            }]
+            resp = requests.post(
+                f"{self.transfer_base_url}/transfer/money/send",
+                params={'token': token, 'lang': 'fr'},
+                data={'data': json.dumps(payload)},
+                timeout=30,
+            )
+            resp.raise_for_status()
+            body = resp.json()
+            code = str(body.get('code', ''))
+            ok = code in ('0', '00', '200') or body.get('status') == '00'
+            if ok:
+                logger.info(f"CinetPay transfert OK pour {transaction_id}")
+            else:
+                logger.warning(
+                    f"CinetPay transfert rejeté ({code}): {body.get('message', '')}"
+                )
+            return {
+                'success': ok,
+                'transfer_id': body.get('transaction_id') or transaction_id,
+                'message': body.get('message', ''),
+            }
+        except requests.exceptions.RequestException as e:
+            logger.error(f"CinetPay: échec réseau du transfert: {e}")
+            return {'success': False, 'transfer_id': None, 'message': str(e)}
+        except CinetPayException as e:
+            logger.error(f"CinetPay: échec du transfert: {e}")
+            return {'success': False, 'transfer_id': None, 'message': str(e)}
+
+    def _mock_payout(self, transaction_id, amount, operator, phone_number):
+        """Transfert simulé (développement)."""
+        logger.info(
+            f"[CINETPAY MOCK] Transfert {transaction_id}: "
+            f"{amount} FCFA → {operator} ({phone_number})"
+        )
+        return {
+            'success': True,
+            'transfer_id': f"TRF_MOCK_{int(time.time())}_{random.randint(1000, 9999)}",
+            'message': 'Transfert mocké avec succès (mode développement)',
+            'mock': True,
+        }
+
     def _mock_payment(
         self,
         transaction_id: str,

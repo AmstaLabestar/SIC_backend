@@ -1672,3 +1672,32 @@ class CinetPaySettlementWiringTest(TestCase):
         self.assertEqual(kwargs['amount'], Decimal('5000'))
         self.assertEqual(kwargs['operator'], 'ORANGE')
         self.assertTrue(kwargs['transaction_id'].startswith('CPAY_'))
+
+
+class CinetPayPayoutTest(TestCase):
+    """Décaissement / transfert (lot 3)."""
+
+    def _client(self):
+        from api.services.cinetpay_client import CinetPayClient
+        return CinetPayClient()
+
+    @override_settings(CINETPAY_CONFIG=_cfg(MODE='mock'))
+    def test_payout_mock_succes_sans_reseau(self):
+        with mock.patch('api.services.cinetpay_client.requests') as m_req:
+            res = self._client().payout(
+                'TX_OUT_1', Decimal('3000'), 'ORANGE', '70000000'
+            )
+        self.assertTrue(res['success'])
+        self.assertTrue(res.get('mock'))
+        self.assertTrue(res['transfer_id'].startswith('TRF_MOCK_'))
+        m_req.post.assert_not_called()
+
+    @override_settings(CINETPAY_CONFIG=_cfg(MODE='live', API_KEY='', SITE_ID=''))
+    def test_payout_sans_credentials_reste_en_mock(self):
+        # Filet de sécurité : pas de transfert réel sans credentials.
+        with mock.patch('api.services.cinetpay_client.requests') as m_req:
+            res = self._client().payout(
+                'TX_OUT_2', Decimal('3000'), 'ORANGE', '70000000'
+            )
+        self.assertTrue(res.get('mock'))
+        m_req.post.assert_not_called()
