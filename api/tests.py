@@ -1584,3 +1584,48 @@ class SetBalanceAPITest(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
         other_puce.refresh_from_db()
         self.assertEqual(other_puce.balance, Decimal('1000.00'))
+
+
+def _cfg(**overrides):
+    """Construit un CINETPAY_CONFIG complet pour override_settings."""
+    base = {
+        'MODE': 'mock', 'API_KEY': '', 'SITE_ID': '', 'SECRET_KEY': '',
+        'BASE_URL': 'https://api-checkout.cinetpay.com/v2',
+        'TRANSFER_BASE_URL': 'https://client.cinetpay.com/v1',
+        'TRANSFER_PASSWORD': '',
+        'NOTIFY_URL': 'http://localhost/api/transactions/webhook/',
+        'RETURN_URL': 'http://localhost/dashboard/', 'WEBHOOK_IPS': [],
+    }
+    base.update(overrides)
+    return base
+
+
+class CinetPayModeTest(TestCase):
+    """Résolution du mode mock/sandbox/live du client CinetPay (lot 1)."""
+
+    def _client(self):
+        from api.services.cinetpay_client import CinetPayClient
+        return CinetPayClient()
+
+    @override_settings(CINETPAY_CONFIG=_cfg(MODE='mock', API_KEY='k', SITE_ID='s'))
+    def test_mode_mock_force_la_simulation(self):
+        self.assertTrue(self._client().use_mock())
+
+    @override_settings(CINETPAY_CONFIG=_cfg(MODE='sandbox', API_KEY='k', SITE_ID='s'))
+    def test_mode_sandbox_avec_credentials_active_le_reseau(self):
+        self.assertFalse(self._client().use_mock())
+
+    @override_settings(CINETPAY_CONFIG=_cfg(MODE='live', API_KEY='', SITE_ID=''))
+    def test_mode_reel_sans_credentials_replie_sur_mock(self):
+        # Filet de sécurité : jamais d'appel réel sans credentials.
+        self.assertTrue(self._client().use_mock())
+
+    @override_settings(CINETPAY_CONFIG=_cfg(MODE='mock'))
+    def test_initiate_payment_mock_ne_touche_pas_le_reseau(self):
+        with mock.patch('api.services.cinetpay_client.requests') as m_req:
+            res = self._client().initiate_payment(
+                'TX1', Decimal('1000'), 'ORANGE', '70000000'
+            )
+        self.assertTrue(res['success'])
+        self.assertTrue(res.get('mock'))
+        m_req.post.assert_not_called()

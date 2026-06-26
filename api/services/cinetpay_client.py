@@ -11,6 +11,8 @@ import hmac
 import logging
 from typing import Optional, Dict, Any
 from decimal import Decimal
+
+import requests
 from django.conf import settings
 
 logger = logging.getLogger('sic.transactions')
@@ -32,19 +34,38 @@ class CinetPayClient:
     - La signature HMAC des requêtes
     """
 
-    BASE_URL = 'https://api-checkout.cinetpay.com/v2'
-
     def __init__(self):
         """Initialise le client avec les configurations."""
-        self.api_key = settings.CINETPAY_CONFIG.get('API_KEY', '')
-        self.site_id = settings.CINETPAY_CONFIG.get('SITE_ID', '')
-        self.secret_key = settings.CINETPAY_CONFIG.get('SECRET_KEY', '')
-        self.notify_url = settings.CINETPAY_CONFIG.get('NOTIFY_URL', '')
-        self.return_url = settings.CINETPAY_CONFIG.get('RETURN_URL', '')
+        cfg = settings.CINETPAY_CONFIG
+        self.mode = (cfg.get('MODE') or 'mock').lower()
+        self.api_key = cfg.get('API_KEY', '')
+        self.site_id = cfg.get('SITE_ID', '')
+        self.secret_key = cfg.get('SECRET_KEY', '')
+        self.base_url = cfg.get('BASE_URL', 'https://api-checkout.cinetpay.com/v2')
+        self.transfer_base_url = cfg.get('TRANSFER_BASE_URL', 'https://client.cinetpay.com/v1')
+        self.transfer_password = cfg.get('TRANSFER_PASSWORD', '')
+        self.notify_url = cfg.get('NOTIFY_URL', '')
+        self.return_url = cfg.get('RETURN_URL', '')
 
-        # Vérifier que les credentials sont configurés
-        if not self.api_key or not self.site_id:
-            logger.warning("CinetPay: Credentials non configurés. Mode simulation actif.")
+        if self.mode != 'mock' and (not self.api_key or not self.site_id):
+            # Sécurité : mode réel demandé mais credentials absents -> on reste
+            # en simulation pour ne JAMAIS planter une opération métier.
+            logger.error(
+                "CinetPay: MODE=%s mais credentials manquants -> repli sur mock.",
+                self.mode,
+            )
+
+    def use_mock(self):
+        """True si aucun appel réseau réel ne doit être émis.
+
+        Vrai en mode 'mock', ou dès qu'un credential essentiel manque (filet de
+        sécurité, même si MODE=sandbox/live a été demandé par erreur).
+        """
+        return self.mode == 'mock' or not self.api_key or not self.site_id
+
+    @property
+    def BASE_URL(self):  # noqa: N802 — compat: ancien attribut de classe
+        return self.base_url
 
     def _generate_transaction_id(self) -> str:
         """Génère un ID de transaction unique."""
@@ -91,8 +112,6 @@ class CinetPayClient:
         Returns:
             dict: Réponse de l'API
         """
-        import requests
-
         url = f"{self.BASE_URL}/{endpoint}"
         headers = {
             'Content-Type': 'application/json',
@@ -152,8 +171,8 @@ class CinetPayClient:
                 'message': str
             }
         """
-        # Mode simulation si pas de credentials
-        if not self.api_key or not self.site_id:
+        # Mode simulation (mock, ou credentials absents)
+        if self.use_mock():
             return self._mock_payment(
                 transaction_id, amount, operator, phone_number, description
             )
@@ -223,7 +242,7 @@ class CinetPayClient:
                 'message': str
             }
         """
-        if not self.api_key or not self.site_id:
+        if self.use_mock():
             # Mode simulation
             return {
                 'status': 'SUCCESS',
@@ -275,7 +294,7 @@ class CinetPayClient:
                 'message': str
             }
         """
-        if not self.api_key or not self.site_id:
+        if self.use_mock():
             return {
                 'success': True,
                 'refund_id': f"REF_{random.randint(100000, 999999)}",

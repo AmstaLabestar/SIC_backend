@@ -40,6 +40,8 @@ django-prometheus>=2.3,<3.0
 
 # Utilities
 python-dotenv>=1.0,<2.0
+# Client HTTP (appels API CinetPay : encaissement, decaissement, statut)
+requests>=2.31,<3.0
 
 # Development
 pytest>=8.0,<9.0

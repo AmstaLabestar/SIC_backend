@@ -485,13 +485,28 @@ MIN_TRANSACTION_AMOUNT = 100
 TRANSACTION_TIMEOUT_MINUTES = int(get_env('TRANSACTION_TIMEOUT_MINUTES', '5'))
 
 # Configuration CinetPay
+# MODE pilote tout : 'mock' (defaut, aucun appel reseau, reponses simulees),
+# 'sandbox' (vraies requetes API de test), 'live' (production, vrai argent).
+# Tant que MODE=mock OU que les credentials manquent, aucun appel reel n'est
+# emis : le comportement actuel (dev) est preserve a l'identique.
 CINETPAY_CONFIG = {
+    'MODE': get_env('CINETPAY_MODE', default='mock').lower(),
     'API_KEY': get_env('CINETPAY_API_KEY', default=''),
     'SITE_ID': get_env('CINETPAY_SITE_ID', default=''),
     'SECRET_KEY': get_env('CINETPAY_SECRET_KEY', default=''),
+    # API Checkout (encaissement). docs.cinetpay.com/api/1.0-fr/checkout
     'BASE_URL': get_env('CINETPAY_BASE_URL', default='https://api-checkout.cinetpay.com/v2'),
+    # API Transfert (decaissement/payout). docs.cinetpay.com/api/1.0-fr/transfert
+    'TRANSFER_BASE_URL': get_env('CINETPAY_TRANSFER_BASE_URL', default='https://client.cinetpay.com/v1'),
+    # Mot de passe du compte transfert (distinct de la cle API ; cf dashboard).
+    'TRANSFER_PASSWORD': get_env('CINETPAY_TRANSFER_PASSWORD', default=''),
     'NOTIFY_URL': get_env('CINETPAY_NOTIFY_URL', default='http://localhost:8000/api/transactions/webhook/'),
     'RETURN_URL': get_env('CINETPAY_RETURN_URL', default='http://localhost:8000/dashboard/'),
+    # Allowlist des IP source des webhooks CinetPay (a renseigner depuis le
+    # dashboard / support). Vide = pas de filtrage IP (la signature reste exigee).
+    'WEBHOOK_IPS': [
+        ip.strip() for ip in get_env('CINETPAY_WEBHOOK_IPS', default='').split(',') if ip.strip()
+    ],
 }
 
 # Webhook secret (alternate env variable name)
