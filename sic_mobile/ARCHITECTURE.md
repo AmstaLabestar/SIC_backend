@@ -15,7 +15,13 @@ Presentation  →  Domain  ←  Data
 - `Domain` ne connaît personne (pur Dart, zéro Flutter)
 - `Data` implémente les interfaces de `Domain`
 
-Quand le backend Django sera prêt, seule la couche `Data` change. La UI et le métier restent intacts.
+Changer une source de données ne touche que la couche `Data` (+ son provider). La UI et
+le métier restent intacts.
+
+> **État réel** : le backend Django **est branché** (REST + WebSocket temps réel). Les
+> features consomment de vraies données via `dio` + interceptor JWT. Les exemples avec
+> « mock » ci-dessous illustrent le pattern (et servent encore aux tests / au mode hors
+> ligne), mais l'app tourne contre l'API réelle. Vue système : [../docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md).
 
 ---
 
@@ -49,7 +55,10 @@ lib/
 │       └── sic_error_widget.dart
 │
 ├── features/                      # Une feature = un écran ou groupe d'écrans
-│   ├── dashboard/                 # Phase 2 — Écran principal
+│   │                              # auth · dashboard · sim_management ·
+│   │                              # balance_update · alerts · transactions ·
+│   │                              # stats · account · kyc …
+│   ├── dashboard/                 # Écran principal agent
 │   │   ├── data/
 │   │   │   ├── datasources/
 │   │   │   │   ├── dashboard_remote_datasource.dart
@@ -79,15 +88,14 @@ lib/
 │   │           ├── benefit_summary_widget.dart
 │   │           └── quick_actions_row.dart
 │   │
-│   ├── sim_management/            # Phase 2 — Gestion des puces
-│   ├── balance_update/            # Phase 2 — Mise à jour solde
-│   ├── alerts/                    # Phase 2 — Alertes solde
-│   │
-│   ├── auth/                      # Phase 1 (structure préparée)
-│   ├── operations/                # Phase 3 (structure préparée)
-│   └── history/                   # Phase 4 (structure préparée)
+│   ├── sim_management/            # Gestion des puces (CRUD)
+│   ├── balance_update/            # Mise à jour solde (set_balance, PIN)
+│   ├── alerts/                    # Alertes solde bas (par puce)
+│   ├── auth/                      # Auth : login, PIN, biométrie, OTP, KYC
+│   └── transactions/             # Opérations + historique
 │
-└── main.dart                      # Entry point + providers globaux
+├── core/realtime/                 # Client WebSocket (notifications transaction live)
+└── main.dart                      # Entry point + cycle de vie temps réel
 ```
 
 ---
@@ -142,15 +150,19 @@ class GetDashboardSummary implements UseCase<AgentSummary, NoParams> {
 
 Implémente les interfaces du Domain. C'est la seule couche qui parle au réseau.
 
-**En Phase 2 (backend pas encore prêt)** : on utilise des **mocks** dans `dashboard_local_datasource.dart`.
-**En Phase 3+ (backend prêt)** : on branche `dashboard_remote_datasource.dart`. Rien d'autre ne change.
+L'app consomme le **backend réel** via `*_remote_datasource.dart` (Dio + interceptor
+JWT). Un datasource local (Hive) peut coexister pour le **cache** d'une donnée — mais une
+donnée a **une seule source de vérité** (pas de cache qui duplique silencieusement le
+serveur). Le branchement remote/local/mock se choisit dans **le provider** du repository.
 
 ```dart
-// En développement — mock data
-class DashboardLocalDatasource {
+class DashboardRemoteDatasource {
+  DashboardRemoteDatasource(this._dio);
+  final Dio _dio;
+
   Future<AgentSummaryModel> getDashboardSummary() async {
-    await Future.delayed(const Duration(milliseconds: 500)); // simule latence
-    return AgentSummaryModel.mock();
+    final res = await _dio.get('/auth/profile/');     // backend réel
+    return AgentSummaryModel.fromJson(res.data);
   }
 }
 ```
@@ -250,11 +262,14 @@ On utilise **Riverpod** comme conteneur d'injection :
 
 ```dart
 // Providers chaînés — Riverpod gère le cycle de vie
-final dioDashboardProvider = Provider((ref) => DashboardLocalDatasource());
+final dashboardDatasourceProvider = Provider((ref) =>
+  DashboardRemoteDatasource(ref.read(dioProvider)));
 final dashboardRepoProvider = Provider((ref) =>
-  DashboardRepositoryImpl(ref.read(dioDashboardProvider)));
+  DashboardRepositoryImpl(ref.read(dashboardDatasourceProvider)));
 final getDashboardSummaryProvider = Provider((ref) =>
   GetDashboardSummary(ref.read(dashboardRepoProvider)));
 ```
 
-Quand on passe au backend réel, on change `DashboardLocalDatasource` par `DashboardRemoteDatasource`. Un seul endroit à modifier.
+Changer la source d'une donnée (remote → cache, → mock de test) se fait à **un seul
+endroit** : le provider du datasource/repository. Le domaine et l'UI ne bougent pas
+(« point de bascule unique », cf. [CONVENTIONS.md](CONVENTIONS.md) §9).

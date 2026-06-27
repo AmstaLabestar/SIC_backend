@@ -32,34 +32,33 @@ docs: update PHASE2 with step 3 details
 
 ---
 
-## 2. Branches
+## 2. Branches & dépôt double
 
 ```
-main          ← production, protégée
-develop       ← intégration, base de travail
-feature/phase2-dashboard        ← écran dashboard
-feature/phase2-sim-management   ← gestion puces
-feature/phase2-balance-update   ← mise à jour solde
-feature/phase2-alerts           ← alertes solde
-fix/dashboard-balance-overflow  ← correction bug
+main                       ← production
+feature/<sujet>            ← une fonctionnalité / un lot (ex. feature/perf-optimisation)
+fix/<sujet>                ← correction de bug
 ```
 
-**Workflow :**
-1. Toujours partir de `develop` pour créer une feature
-2. PR de `feature/*` → `develop`
-3. PR de `develop` → `main` uniquement après validation complète d'une phase
+**⚠️ Dépôt double.** `sic_mobile/` est suivi par **deux** repos git :
+- **collab** (le dépôt complet backend + mobile) ;
+- **perso** (`SIC_Mobile`, le mobile seul).
+
+Conséquences :
+1. On **pousse sur les deux** repos quand on touche au mobile.
+2. **Éviter les `checkout` croisés** sur la même copie de travail (risque de mélange).
+3. **Finir toute la série de lots avant de pousser** ; chaque lot finit avec
+   `flutter analyze` propre + tests verts.
 
 ```powershell
-# Créer une feature
-git checkout develop
-git pull origin develop
-git checkout -b feature/phase2-dashboard
-
-# Terminer une feature
-git add .
-git commit -m "feat(dashboard): complete dashboard screen Phase 2"
-git push origin feature/phase2-dashboard
-# → Ouvrir une Pull Request sur GitHub vers develop
+# Travail sur un lot
+git checkout -b feature/<sujet>
+# ... lots successifs, chacun : analyze + test verts ...
+git add <fichiers précis>          # ne pas embarquer le travail d'autrui
+git commit -m "feat(scope): description"
+# une fois la série terminée :
+git push collab feature/<sujet>
+git push perso  feature/<sujet>    # pour le mobile
 ```
 
 ---
